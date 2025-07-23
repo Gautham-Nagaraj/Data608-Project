@@ -15,3 +15,6 @@ sudo docker run --name qwen2.5_cont \
   -p 11434:11434 \
   --entrypoint /app/entrypoint.sh \
   qwen_image
+
+4 - to test if LLM is running
+http://localhost:11434/
