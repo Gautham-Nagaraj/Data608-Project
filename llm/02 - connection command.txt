@@ -1,0 +1,1 @@
+ ssh -i 'C:\Users\frlin\OneDrive\Documentos\_uofc\2025 Summer\DATA_608\aws_class_1.pem' -L 11434:localhost:11434 ubuntu@107.21.90.168

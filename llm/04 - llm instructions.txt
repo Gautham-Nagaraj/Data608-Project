@@ -1,0 +1,17 @@
+
+1- change authorization to entrypoint.sh
+
+sudo chmod 777 entrypoint.sh
+
+2- build the image
+
+sudo docker build -t qwen_image .
+
+3- run the container
+
+sudo docker run --name qwen2.5_cont \
+  --rm -v qwen:/root/.ollama \
+  -v "$(pwd)/entrypoint.sh:/app/entrypoint.sh" \
+  -p 11434:11434 \
+  --entrypoint /app/entrypoint.sh \
+  qwen_image
