@@ -1,0 +1,1 @@
+follow https://www.datastax.com/blog/local-ai-using-ollama-with-agents
