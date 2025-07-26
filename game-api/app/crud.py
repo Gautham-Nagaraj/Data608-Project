@@ -1,3 +1,4 @@
+import datetime
 import uuid
 
 from sqlalchemy.orm import Session
@@ -173,3 +174,8 @@ def record_trade(db: Session, trade: schemas.TradeCreate):
 
 def get_trades(db: Session, session_id: uuid.UUID):
     return db.query(models.Trade).filter(models.Trade.session_id == session_id).all()
+
+def get_eligible_dates(db: Session):
+    """Get a list of eligible month and years for stock trading."""
+    eligible_dates = db.query(models.Stock).filter(models.Stock.available_from <= datetime.now()).all()
+    return [(date.available_from.month, date.available_from.year) for date in eligible_dates]

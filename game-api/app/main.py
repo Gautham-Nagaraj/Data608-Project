@@ -22,14 +22,15 @@ logger.add(
 app = FastAPI(debug=settings.DEBUG)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=["http://localhost:5173"],  # Vite dev server
+    # allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
-from app.routers import admin, players, sessions, selections, stocks, trades
+from app.routers import admin, players, sessions, selections, stocks, trades, ws
 
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(players.router, prefix="/api", tags=["players"])
@@ -37,7 +38,7 @@ app.include_router(sessions.router, prefix="/api", tags=["sessions"])
 app.include_router(selections.router, prefix="/api", tags=["selections"])
 app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
 app.include_router(trades.router, prefix="/api", tags=["trades"])
-
+app.include_router(ws.router, prefix="/ws", tags=["ws"])
 
 @app.get("/health")
 def health_check():
