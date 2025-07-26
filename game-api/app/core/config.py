@@ -1,5 +1,6 @@
-from pydantic import BaseSettings, PostgresDsn
 from typing import List
+from pydantic import PostgresDsn
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """
@@ -10,9 +11,10 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = ["*"]
     SECRET_KEY: str
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
 # Initialize settings instance
 settings = Settings()

@@ -1,9 +1,10 @@
 import sys
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+
 from app.core.config import settings
-from app.core.db import engine, Base, get_db
 
 # Initialize DB tables if not using Alembic
 # Base.metadata.create_all(bind=engine)
@@ -28,11 +29,15 @@ app.add_middleware(
 )
 
 # Include routers
-from app.routers import admin, sessions, selections, trades
-app.include_router(admin.router, prefix="/admin", tags=["admin"])
-app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
-app.include_router(selections.router, prefix="/selections", tags=["selections"])
-app.include_router(trades.router, prefix="/trades", tags=["trades"])
+from app.routers import admin, players, sessions, selections, stocks, trades
+
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(players.router, prefix="/api", tags=["players"])
+app.include_router(sessions.router, prefix="/api", tags=["sessions"])
+app.include_router(selections.router, prefix="/api", tags=["selections"])
+app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
+app.include_router(trades.router, prefix="/api", tags=["trades"])
+
 
 @app.get("/health")
 def health_check():

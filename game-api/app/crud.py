@@ -1,11 +1,15 @@
-from sqlalchemy.orm import Session
 import uuid
+
+from sqlalchemy.orm import Session
+
 from app import models, schemas
+
 
 # Players
 
 def get_player(db: Session, player_id: int):
     return db.query(models.Player).filter(models.Player.id == player_id).first()
+
 
 def create_player(db: Session, player: schemas.PlayerCreate):
     db_player = models.Player(nickname=player.nickname)
@@ -14,10 +18,60 @@ def create_player(db: Session, player: schemas.PlayerCreate):
     db.refresh(db_player)
     return db_player
 
+
+def get_players(db: Session, nickname: str = None, limit: int = None, offset: int = 0):
+    query = db.query(models.Player)
+    
+    # Apply nickname filter if provided
+    if nickname:
+        query = query.filter(models.Player.nickname.ilike(f"%{nickname}%"))
+    
+    # Apply pagination
+    if offset:
+        query = query.offset(offset)
+    if limit:
+        query = query.limit(limit)
+    
+    return query.all()
+
+
+# Stocks
+
+def get_stock_by_symbol(db: Session, symbol: str):
+    return db.query(models.Stock).filter(models.Stock.symbol == symbol).first()
+
+
+def create_stock(db: Session, stock: schemas.StockCreate):
+    db_stock = models.Stock(**stock.dict())
+    db.add(db_stock)
+    db.commit()
+    db.refresh(db_stock)
+    return db_stock
+
+
+def get_stocks(db: Session, category: str = None, sector: str = None, limit: int = None, offset: int = 0):
+    query = db.query(models.Stock)
+    
+    # Apply filters if provided
+    if category:
+        query = query.filter(models.Stock.category == category)
+    if sector:
+        query = query.filter(models.Stock.sector == sector)
+    
+    # Apply pagination
+    if offset:
+        query = query.offset(offset)
+    if limit:
+        query = query.limit(limit)
+    
+    return query.all()
+
+
 # Admin Users
 
 def get_admin_user(db: Session, login: str):
     return db.query(models.AdminUser).filter(models.AdminUser.login == login).first()
+
 
 # Sessions
 
@@ -27,6 +81,7 @@ def create_session(db: Session, session: schemas.SessionCreate):
     db.commit()
     db.refresh(db_session)
     return db_session
+
 
 # Helper to fetch a session by ID
 
@@ -44,6 +99,7 @@ def update_session(db: Session, session_id: uuid.UUID, session_update: schemas.S
     db.refresh(db_session)
     return db_session
 
+
 # Selections
 
 def set_selection(db: Session, session_id: uuid.UUID, selection: schemas.SelectionCreate):
@@ -52,6 +108,58 @@ def set_selection(db: Session, session_id: uuid.UUID, selection: schemas.Selecti
     db.commit()
     db.refresh(db_sel)
     return db_sel
+
+def get_selection(db: Session, session_id: uuid.UUID):
+    return db.query(models.SessionSelection).filter(models.SessionSelection.session_id == session_id).first()
+
+def get_roulette_selection(db: Session, month: int, year: int):
+    """Get the roulette selection for a specific month and year."""
+    from datetime import date
+    import calendar
+    
+    # Get the first and last day of the specified month
+    month_start = date(year, month, 1)
+    last_day = calendar.monthrange(year, month)[1]
+    month_end = date(year, month, last_day)
+    
+    # Get stocks available within the given month
+    # A stock is available in the month if:
+    # - It starts before or at the beginning of the month AND
+    # - It ends after the month or has no end date
+    available_stocks = db.query(models.Stock).filter(
+        (models.Stock.available_from <= month_start) &
+        ((models.Stock.available_to >= month_end) | (models.Stock.available_to.is_(None)))
+    ).all()
+    
+    if not available_stocks:
+        return None
+    
+    # Filter by categories
+    popular_stocks = [s for s in available_stocks if s.category == "popular"]
+    volatile_stocks = [s for s in available_stocks if s.category == "volatile"]
+    sector_stocks = [s for s in available_stocks if s.category == "sector"]
+    
+    if not (popular_stocks and volatile_stocks and sector_stocks):
+        return None
+    
+    # Randomly select one stock from each category
+    import random
+    
+    # For sector_symbol: first get a random sector, then get a random stock from that sector
+    available_sectors = list(set(s.sector for s in sector_stocks if s.sector))
+    if not available_sectors:
+        return None
+    
+    selected_sector = random.choice(available_sectors)
+    sector_stocks_in_selected_sector = [s for s in sector_stocks if s.sector == selected_sector]
+    
+    return schemas.Selection(
+        id=0,  # This is a virtual selection
+        session_id=uuid.uuid4(),  # This is a virtual session_id
+        popular_symbol=random.choice(popular_stocks).symbol,
+        volatile_symbol=random.choice(volatile_stocks).symbol,
+        sector_symbol=random.choice(sector_stocks_in_selected_sector).symbol
+    )
 
 # Trades
 

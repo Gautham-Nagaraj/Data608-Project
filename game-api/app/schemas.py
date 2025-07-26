@@ -1,30 +1,53 @@
-from pydantic import BaseModel, Field
+from datetime import datetime, date
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+
+class ORMModel(BaseModel):
+    model_config = {"from_attributes": True}
+
 
 # Players
-class PlayerBase(BaseModel):
+class PlayerBase(ORMModel):
     nickname: str = Field(..., example="TraderJoe")
+
 
 class PlayerCreate(PlayerBase):
     pass
 
+
 class Player(PlayerBase):
     id: int
 
-    class Config:
-        orm_mode = True
+
+# Stocks
+class StockBase(ORMModel):
+    symbol: str = Field(..., example="AAPL", max_length=10)
+    company_name: str = Field(..., example="Apple Inc.")
+    sector: Optional[str] = Field(None, example="Technology")
+    category: str = Field(..., example="popular")  # popular, volatile, sector
+    available_from: Optional[date] = None
+    available_to: Optional[date] = None
+
+
+class StockCreate(StockBase):
+    pass
+
+
+class Stock(StockBase):
+    pass
+
 
 # Admin Users
-class AdminUserBase(BaseModel):
+class AdminUserBase(ORMModel):
     login: str
+
 
 class AdminUser(AdminUserBase):
     id: int
 
-    class Config:
-        orm_mode = True
 
 # Sessions
 class SessionBase(BaseModel):
@@ -33,50 +56,52 @@ class SessionBase(BaseModel):
     balance: float = Field(..., example=10000.0)
     unsold_stocks: List[dict] = Field(default_factory=list)
 
+
 class SessionCreate(SessionBase):
     started_at: datetime
 
+
 class SessionUpdate(BaseModel):
-    ended_at: Optional[datetime]
-    status: Optional[str]
-    balance: Optional[float]
-    unsold_stocks: Optional[List[dict]]
+    ended_at: Optional[datetime] = None
+    status: Optional[str] = None
+    balance: Optional[float] = None
+    unsold_stocks: Optional[List[dict]] = None
+
 
 class Session(SessionBase):
     session_id: UUID
     started_at: datetime
     ended_at: Optional[datetime]
 
-    class Config:
-        orm_mode = True
 
 # Selections
-class SelectionCreate(BaseModel):
-    popular_symbol: str
-    volatile_symbol: str
-    sector_symbol: str
+class SelectionCreate(ORMModel):
+    popular_symbol: str = Field(..., min_length=1, example="AAPL")
+    volatile_symbol: str = Field(..., min_length=1, example="TSLA")
+    sector_symbol: str = Field(..., min_length=1, example="MSFT")
+
 
 class Selection(SelectionCreate):
     id: int
     session_id: UUID
 
-    class Config:
-        orm_mode = True
 
 # Trades
-class TradeBase(BaseModel):
+class TradeBase(ORMModel):
     session_id: UUID
     symbol: str
     action: str = Field(..., example="buy")  # or "sell"
     qty: int
     price: float
 
+
 class TradeCreate(TradeBase):
     timestamp: datetime
+
 
 class Trade(TradeBase):
     trade_id: int
     timestamp: datetime
 
-    class Config:
-        orm_mode = True
+class Player(PlayerBase):
+    id: int

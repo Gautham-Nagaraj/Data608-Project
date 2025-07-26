@@ -1,6 +1,7 @@
 [project]
 name = "stock-roulette-api"
 version = "0.1.0"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "uvicorn",
@@ -9,14 +10,12 @@ dependencies = [
     "pydantic",
     "itsdangerous>=2.2.0",
     "passlib>=1.7.4",
+    "loguru>=0.7.3",
+    "pydantic-settings>=2.10.1",
+    "jinja2>=3.1.6",
+    "psycopg[binary]>=3.2.9",
+    "python-multipart>=0.0.6",
+    "pytest>=7.4.0",
+    "httpx>=0.24.0",
+    "bcrypt>=4.0.0",
 ]
-
-[tool.uv.scripts]
-# Launch in development mode with live reload:
-dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
-# Production start:
-start = "uvicorn app.main:app --host 0.0.0.0 --port 80"
-# Run migrations:
-migrate = "alembic upgrade head"
-# (Optional) Drop and recreate DB from scratch:
-reset-db = "python -c \"from app.core.database import Base, engine; Base.metadata.drop_all(engine); Base.metadata.create_all(engine)\""

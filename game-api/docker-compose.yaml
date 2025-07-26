@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:latest
+    container_name: db
+    environment:
+      POSTGRES_USER: stockroulette_user
+      POSTGRES_PASSWORD: ChangeMe123!
+      POSTGRES_DB: stockroulette
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  game-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: game-api
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://stockroulette_user:ChangeMe123!@db:5432/stockroulette
+    volumes:
+      - .:/app
+    command: >
+      sh -c "
+        uv run -- alembic upgrade head &&
+        uv run -- uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+volumes:
+  postgres_data:

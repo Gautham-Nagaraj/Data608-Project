@@ -1,6 +1,8 @@
+from typing import Generator
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from typing import Generator
+
 from app.core.config import settings
 
 """
@@ -8,7 +10,7 @@ Database engine and session management.
 """
 # Create SQLAlchemy engine
 engine = create_engine(
-    settings.DATABASE_URL,
+    str(settings.DATABASE_URL),
     pool_pre_ping=True
 )
 
@@ -18,6 +20,7 @@ SessionLocal = sessionmaker(
     autoflush=False,
     bind=engine
 )
+
 
 def get_db() -> Generator:
     """
