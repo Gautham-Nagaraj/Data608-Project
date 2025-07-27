@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -40,6 +41,26 @@ def list_stocks(
     return crud.get_stocks(db, category=category, sector=sector, limit=limit, offset=offset)
 
 
+@router.get("/sectors", response_model=List[str])
+def get_stock_sectors(db: Session = Depends(get_db)):
+    """Get a list of unique stock sectors."""
+    return crud.get_stock_sectors(db)
+
+
+@router.get("/eligible_dates", response_model=List[Tuple[int, int]])
+def get_eligible_dates(db: Session = Depends(get_db)):
+    """Get a list of eligible month and years for stock trading."""
+    return crud.get_eligible_dates(db)
+
+
+@router.get("/prices/{symbol}", response_model=List[schemas.StockPrice])
+def get_stock_prices(symbol: str, start_date: str, end_date: str, db: Session = Depends(get_db)):
+    """Get stock prices for a specific symbol within a date range."""
+    start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+    return crud.get_stock_prices(db, symbol=symbol, start_date=start_date, end_date=end_date)
+
+
 @router.get("/{symbol}", response_model=schemas.Stock)
 def get_stock(symbol: str, db: Session = Depends(get_db)):
     """Get a specific stock by symbol."""
@@ -63,8 +84,3 @@ def create_stocks_bulk(stocks_in: List[schemas.StockCreate], db: Session = Depen
             created_stocks.append(existing_stock)
     
     return created_stocks
-
-@router.get("/eligible_dates", response_model=List[Tuple[int, int]])
-def get_eligible_dates(db: Session = Depends(get_db)):
-    """Get a list of eligible month and years for stock trading."""
-    return crud.get_eligible_dates(db)

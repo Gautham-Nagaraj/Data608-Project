@@ -2,6 +2,7 @@ import datetime
 import uuid
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app import models, schemas
 
@@ -179,3 +180,22 @@ def get_eligible_dates(db: Session):
     """Get a list of eligible month and years for stock trading."""
     eligible_dates = db.query(models.Stock).filter(models.Stock.available_from <= datetime.now()).all()
     return [(date.available_from.month, date.available_from.year) for date in eligible_dates]
+
+def get_stock_prices(db: Session, symbol: str, start_date: datetime.date, end_date: datetime.date):
+    """Get stock prices for a given symbol within a date range."""
+    return db.query(models.StockPrice).filter(
+        models.StockPrice.symbol == symbol,
+        models.StockPrice.date >= start_date,
+        models.StockPrice.date <= end_date
+    ).all()
+
+def get_stock_sectors(db: Session):
+    """Get a list of unique stock sectors from the stock_sectors view."""
+    try:
+        # Try to query the view first
+        result = db.execute(text("SELECT sector FROM stock_sectors ORDER BY sector"))
+        return [row[0] for row in result.fetchall()]
+    except Exception:
+        # Fallback to querying stocks table directly if view doesn't exist
+        result = db.execute(text("SELECT DISTINCT sector FROM stocks WHERE sector IS NOT NULL ORDER BY sector"))
+        return [row[0] for row in result.fetchall()]

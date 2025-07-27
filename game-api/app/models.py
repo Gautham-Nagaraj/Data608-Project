@@ -40,6 +40,11 @@ class Stock(Base):
     available_from = Column(Date, nullable=True)
     available_to = Column(Date, nullable=True)
 
+class StockPrice(Base):
+    __tablename__ = 'stock_prices'
+    symbol = Column(String, ForeignKey('stocks.symbol'), primary_key=True, nullable=False)
+    date = Column(DateTime, primary_key=True, nullable=False)
+    price = Column(Float, nullable=False)
 
 class SessionSelection(Base):
     __tablename__ = 'session_selections'
@@ -59,3 +64,4 @@ class Trade(Base):
     action = Column(String, nullable=False)
     qty = Column(Integer, nullable=False)
     price = Column(Float, nullable=False)
+

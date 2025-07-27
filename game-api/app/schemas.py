@@ -105,3 +105,11 @@ class Trade(TradeBase):
 
 class Player(PlayerBase):
     id: int
+
+class StockPrice(BaseModel):
+    symbol: str
+    price: float
+    date: datetime
+
+    class Config:
+        from_attributes = True
