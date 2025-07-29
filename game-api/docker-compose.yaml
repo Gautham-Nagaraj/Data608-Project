@@ -25,8 +25,10 @@ services:
       DATABASE_URL: postgresql+psycopg://stockroulette_user:ChangeMe123!@db:5432/stockroulette
     volumes:
       - .:/app
+      - /app/.venv  # Exclude .venv from volume mount
     command: >
       sh -c "
+        uv sync &&
         uv run -- alembic upgrade head &&
         uv run -- uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
       "

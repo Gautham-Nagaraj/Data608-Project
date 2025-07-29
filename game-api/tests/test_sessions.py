@@ -27,7 +27,7 @@ class TestSessionsRouter:
             "unsold_stocks": []
         }
 
-        response = client.post("/sessions/", json=session_data)
+        response = client.post("/api/sessions/", json=session_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -46,7 +46,7 @@ class TestSessionsRouter:
             "status": "active"
         }
 
-        response = client.post("/sessions/", json=invalid_data)
+        response = client.post("/api/sessions/", json=invalid_data)
         assert response.status_code == 422
 
     def test_create_session_nonexistent_player(self, client: TestClient):
@@ -59,7 +59,7 @@ class TestSessionsRouter:
             "unsold_stocks": []
         }
 
-        response = client.post("/sessions/", json=session_data)
+        response = client.post("/api/sessions/", json=session_data)
         # Should fail due to player validation
         assert response.status_code == 400  # Bad Request due to non-existent player
 
@@ -83,7 +83,7 @@ class TestSessionsRouter:
         db_session.add(session)
         db_session.commit()
 
-        response = client.get(f"/sessions/{session_id}")
+        response = client.get(f"/api/sessions/{session_id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -95,13 +95,13 @@ class TestSessionsRouter:
     def test_read_session_not_found(self, client: TestClient):
         """Test GET /sessions/{session_id} with non-existent session."""
         non_existent_id = uuid.uuid4()
-        response = client.get(f"/sessions/{non_existent_id}")
+        response = client.get(f"/api/sessions/{non_existent_id}")
         assert response.status_code == 404
         assert response.json()["detail"] == "Session not found"
 
     def test_read_session_invalid_uuid(self, client: TestClient):
         """Test GET /sessions/{session_id} with invalid UUID."""
-        response = client.get("/sessions/invalid-uuid")
+        response = client.get("/api/sessions/invalid-uuid")
         assert response.status_code == 422
 
     def test_modify_session_success(self, client: TestClient, db_session: Session):
@@ -130,7 +130,7 @@ class TestSessionsRouter:
             "ended_at": "2025-07-25T15:00:00"
         }
 
-        response = client.patch(f"/sessions/{session_id}", json=update_data)
+        response = client.patch(f"/api/sessions/{session_id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -143,7 +143,7 @@ class TestSessionsRouter:
         non_existent_id = uuid.uuid4()
         update_data = {"status": "completed"}
 
-        response = client.patch(f"/sessions/{non_existent_id}", json=update_data)
+        response = client.patch(f"/api/sessions/{non_existent_id}", json=update_data)
         assert response.status_code == 404
         assert response.json()["detail"] == "Session not found"
 
@@ -169,7 +169,7 @@ class TestSessionsRouter:
 
         # Update only status
         update_data = {"status": "paused"}
-        response = client.patch(f"/sessions/{session_id}", json=update_data)
+        response = client.patch(f"/api/sessions/{session_id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()

@@ -84,3 +84,37 @@ def db_session(test_db):
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture(scope="function")
+def admin_user_with_session(db_session):
+    """Create an admin user, player, and session for testing."""
+    from app.models import AdminUser, Player, Session as GameSession
+    from app.core.auth import hash_password
+    import uuid
+    from datetime import datetime
+    
+    # Create admin user
+    admin = AdminUser(
+        login="testadmin",
+        password_hash=hash_password("testpass123")
+    )
+    db_session.add(admin)
+    
+    # Create player
+    player = Player(nickname="TestPlayer")
+    db_session.add(player)
+    db_session.flush()  # Get the player ID
+    
+    # Create session
+    session = GameSession(
+        session_id=uuid.uuid4(),
+        player_id=player.id,
+        started_at=datetime.utcnow(),
+        status="active",
+        balance=10000.0
+    )
+    db_session.add(session)
+    db_session.commit()
+    
+    return admin, player, session

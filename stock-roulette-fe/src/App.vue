@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterView } from 'vue-router'
 </script>
 
 <template>
-  <header>
+  <!-- <header>
     <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
 
     <div class="wrapper">
@@ -13,9 +13,10 @@ import { RouterLink, RouterView } from 'vue-router'
         <RouterLink to="/">Game</RouterLink>
         <RouterLink to="/results">Results</RouterLink>
         <RouterLink to="/summary">Summary</RouterLink>
+        <RouterLink to="/admin" class="admin-link">Admin</RouterLink>
       </nav>
     </div>
-  </header>
+  </header> -->
 
   <RouterView />
 </template>
@@ -54,6 +55,17 @@ nav a {
 
 nav a:first-of-type {
   border: 0;
+}
+
+.admin-link {
+  background-color: #dc3545 !important;
+  color: white !important;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.admin-link:hover {
+  background-color: #c82333 !important;
 }
 
 @media (min-width: 1024px) {

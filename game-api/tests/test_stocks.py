@@ -269,15 +269,15 @@ class TestStocksRouter:
         db_session.commit()
 
         prices = [
-            StockPrice(symbol="AAPL", date=datetime(2024, 1, 1), price=150.0),
-            StockPrice(symbol="AAPL", date=datetime(2024, 1, 2), price=152.0),
-            StockPrice(symbol="AAPL", date=datetime(2024, 1, 3), price=148.0),
+            StockPrice(symbol="AAPL", date=datetime(2019, 1, 1), price=150.0),
+            StockPrice(symbol="AAPL", date=datetime(2019, 1, 2), price=152.0),
+            StockPrice(symbol="AAPL", date=datetime(2019, 1, 3), price=148.0),
         ]
         for price in prices:
             db_session.add(price)
         db_session.commit()
 
-        response = client.get("/api/stocks/prices/AAPL?start_date=2024-01-01&end_date=2024-01-03")
+        response = client.get("/api/stocks/prices/AAPL?start_date=2019-01-01&end_date=2019-01-03")
         assert response.status_code == 200
         
         data = response.json()
@@ -305,3 +305,213 @@ class TestStocksRouter:
 
         # Test that we can still access the stock with symbol "sectors" via a different approach
         # This would require a different endpoint or parameter to avoid route conflict
+
+    def test_get_eligible_dates_roulette_no_stocks(self, client: TestClient, db_session: Session):
+        """Test GET /api/stocks/eligible_dates/roulette returns null when no stocks exist."""
+        response = client.get("/api/stocks/eligible_dates/roulette")
+        assert response.status_code == 200
+        assert response.json() is None
+
+    def test_get_eligible_dates_roulette_insufficient_categories(self, client: TestClient, db_session: Session):
+        """Test GET /api/stocks/eligible_dates/roulette returns null when not all categories are available."""
+        # Create stocks but only from 2 categories (missing 'sector' category)
+        stocks = [
+            Stock(
+                symbol="POPULAR1", 
+                company_name="Popular Company 1", 
+                sector="Technology", 
+                category="popular",
+                available_from=date(2024, 1, 1)
+            ),
+            Stock(
+                symbol="VOLATILE1", 
+                company_name="Volatile Company 1", 
+                sector="Technology", 
+                category="volatile",
+                available_from=date(2024, 1, 1)
+            ),
+        ]
+        for stock in stocks:
+            db_session.add(stock)
+        db_session.commit()
+
+        response = client.get("/api/stocks/eligible_dates/roulette")
+        assert response.status_code == 200
+        assert response.json() is None
+
+    def test_get_eligible_dates_roulette_valid_selection(self, client: TestClient, db_session: Session):
+        """Test GET /api/stocks/eligible_dates/roulette returns a valid date when all categories are available."""
+        # Create stocks from all three categories available in the same month
+        stocks = [
+            Stock(
+                symbol="POPULAR1", 
+                company_name="Popular Company 1", 
+                sector="Technology", 
+                category="popular",
+                available_from=date(2024, 1, 1)
+            ),
+            Stock(
+                symbol="VOLATILE1", 
+                company_name="Volatile Company 1", 
+                sector="Finance", 
+                category="volatile",
+                available_from=date(2024, 1, 1)
+            ),
+            Stock(
+                symbol="SECTOR1", 
+                company_name="Sector Company 1", 
+                sector="Healthcare", 
+                category="sector",
+                available_from=date(2024, 1, 1)
+            ),
+        ]
+        for stock in stocks:
+            db_session.add(stock)
+        db_session.commit()
+
+        response = client.get("/api/stocks/eligible_dates/roulette")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data is not None
+        assert isinstance(data, dict)
+        assert "month" in data
+        assert "year" in data
+        assert isinstance(data["month"], int)  # month
+        assert isinstance(data["year"], int)  # year
+        assert 1 <= data["month"] <= 12  # Valid month
+        assert data["year"] > 0  # Valid year
+
+    def test_get_eligible_dates_roulette_multiple_dates_returns_one(self, client: TestClient, db_session: Session):
+        """Test GET /api/stocks/eligible_dates/roulette returns exactly one date even when multiple valid dates exist."""
+        # Create stocks from all three categories available in different months
+        stocks = [
+            # January 2024 stocks
+            Stock(
+                symbol="POPULAR1", 
+                company_name="Popular Company 1", 
+                sector="Technology", 
+                category="popular",
+                available_from=date(2024, 1, 1)
+            ),
+            Stock(
+                symbol="VOLATILE1", 
+                company_name="Volatile Company 1", 
+                sector="Finance", 
+                category="volatile",
+                available_from=date(2024, 1, 1)
+            ),
+            Stock(
+                symbol="SECTOR1", 
+                company_name="Sector Company 1", 
+                sector="Healthcare", 
+                category="sector",
+                available_from=date(2024, 1, 1)
+            ),
+            # March 2024 stocks
+            Stock(
+                symbol="POPULAR2", 
+                company_name="Popular Company 2", 
+                sector="Technology", 
+                category="popular",
+                available_from=date(2024, 3, 1)
+            ),
+            Stock(
+                symbol="VOLATILE2", 
+                company_name="Volatile Company 2", 
+                sector="Finance", 
+                category="volatile",
+                available_from=date(2024, 3, 1)
+            ),
+            Stock(
+                symbol="SECTOR2", 
+                company_name="Sector Company 2", 
+                sector="Healthcare", 
+                category="sector",
+                available_from=date(2024, 3, 1)
+            ),
+        ]
+        for stock in stocks:
+            db_session.add(stock)
+        db_session.commit()
+
+        response = client.get("/api/stocks/eligible_dates/roulette")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data is not None
+        assert isinstance(data, dict)
+        assert "month" in data
+        assert "year" in data
+        assert isinstance(data["month"], int)  # month
+        assert isinstance(data["year"], int)  # year
+        # Should be one of the valid dates (January or March 2024)
+        assert (data["month"], data["year"]) in [(1, 2024), (3, 2024)]
+
+    def test_get_eligible_dates_roulette_respects_availability_periods(self, client: TestClient, db_session: Session):
+        """Test GET /api/stocks/eligible_dates/roulette respects available_to dates."""
+        # Create stocks where some expire before others become available
+        stocks = [
+            # Available only in January 2024
+            Stock(
+                symbol="POPULAR1", 
+                company_name="Popular Company 1", 
+                sector="Technology", 
+                category="popular",
+                available_from=date(2024, 1, 1),
+                available_to=date(2024, 1, 31)
+            ),
+            Stock(
+                symbol="VOLATILE1", 
+                company_name="Volatile Company 1", 
+                sector="Finance", 
+                category="volatile",
+                available_from=date(2024, 1, 1),
+                available_to=date(2024, 1, 31)
+            ),
+            Stock(
+                symbol="SECTOR1", 
+                company_name="Sector Company 1", 
+                sector="Healthcare", 
+                category="sector",
+                available_from=date(2024, 1, 1),
+                available_to=date(2024, 1, 31)
+            ),
+            # Available from March 2024 onwards (no end date)
+            Stock(
+                symbol="POPULAR2", 
+                company_name="Popular Company 2", 
+                sector="Technology", 
+                category="popular",
+                available_from=date(2024, 3, 1)
+            ),
+            Stock(
+                symbol="VOLATILE2", 
+                company_name="Volatile Company 2", 
+                sector="Finance", 
+                category="volatile",
+                available_from=date(2024, 3, 1)
+            ),
+            Stock(
+                symbol="SECTOR2", 
+                company_name="Sector Company 2", 
+                sector="Healthcare", 
+                category="sector",
+                available_from=date(2024, 3, 1)
+            ),
+        ]
+        for stock in stocks:
+            db_session.add(stock)
+        db_session.commit()
+
+        response = client.get("/api/stocks/eligible_dates/roulette")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data is not None
+        assert isinstance(data, dict)
+        assert "month" in data
+        assert "year" in data
+        # Should be either January 2024 or March 2024 (or later)
+        # February 2024 should not be valid since some stocks expired and others haven't started
+        assert (data["month"], data["year"]) in [(1, 2024)] or (data["year"] == 2024 and data["month"] >= 3) or data["year"] > 2024

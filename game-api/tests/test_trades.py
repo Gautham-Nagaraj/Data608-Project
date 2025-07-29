@@ -12,7 +12,7 @@ class TestTradesRouter:
     """Test cases for trades router endpoints."""
 
     def test_post_trade_success(self, client: TestClient, db_session: Session):
-        """Test POST /trades/ creates a new trade."""
+        """Test POST /api/trades/ creates a new trade."""
         # Create test player and session first
         player = Player(nickname="TestPlayer")
         db_session.add(player)
@@ -44,7 +44,7 @@ class TestTradesRouter:
             "price": 150.75
         }
 
-        response = client.post("/trades/", json=trade_data)
+        response = client.post("/api/trades/", json=trade_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -57,7 +57,7 @@ class TestTradesRouter:
         assert "timestamp" in data
 
     def test_post_trade_sell_action(self, client: TestClient, db_session: Session):
-        """Test POST /trades/ with sell action."""
+        """Test POST /api/trades/ with sell action."""
         # Create test player and session
         player = Player(nickname="TestPlayer")
         db_session.add(player)
@@ -89,7 +89,7 @@ class TestTradesRouter:
             "price": 245.50
         }
 
-        response = client.post("/trades/", json=trade_data)
+        response = client.post("/api/trades/", json=trade_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -98,7 +98,7 @@ class TestTradesRouter:
         assert data["price"] == 245.50
 
     def test_post_trade_invalid_data(self, client: TestClient):
-        """Test POST /trades/ with invalid data."""
+        """Test POST /api/trades/ with invalid data."""
         invalid_data = {
             "session_id": "invalid-uuid",
             "timestamp": "invalid-date",
@@ -108,11 +108,11 @@ class TestTradesRouter:
             "price": "invalid"  # Should be float
         }
 
-        response = client.post("/trades/", json=invalid_data)
+        response = client.post("/api/trades/", json=invalid_data)
         assert response.status_code == 422
 
     def test_post_trade_missing_fields(self, client: TestClient):
-        """Test POST /trades/ with missing required fields."""
+        """Test POST /api/trades/ with missing required fields."""
         incomplete_data = {
             "session_id": str(uuid.uuid4()),
             "symbol": "AAPL",
@@ -120,11 +120,11 @@ class TestTradesRouter:
             # Missing qty, price, timestamp
         }
 
-        response = client.post("/trades/", json=incomplete_data)
+        response = client.post("/api/trades/", json=incomplete_data)
         assert response.status_code == 422
 
     def test_post_trade_negative_values(self, client: TestClient, db_session: Session):
-        """Test POST /trades/ with negative quantity and price."""
+        """Test POST /api/trades/ with negative quantity and price."""
         # Create test setup
         player = Player(nickname="TestPlayer")
         db_session.add(player)
@@ -156,12 +156,12 @@ class TestTradesRouter:
         }
 
         # This should either be rejected or handled by business logic
-        response = client.post("/trades/", json=trade_data)
+        response = client.post("/api/trades/", json=trade_data)
         # Accept either validation error or successful creation
         assert response.status_code in [200, 422]
 
     def test_list_trades_success(self, client: TestClient, db_session: Session):
-        """Test GET /trades/session/{session_id} returns trades for session."""
+        """Test GET /api/trades/session/{session_id} returns trades for session."""
         # Create test player and session
         player = Player(nickname="TestPlayer")
         db_session.add(player)
@@ -207,7 +207,7 @@ class TestTradesRouter:
 
         db_session.commit()
 
-        response = client.get(f"/trades/session/{session_id}")
+        response = client.get(f"/api/trades/session/{session_id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -221,7 +221,7 @@ class TestTradesRouter:
         assert data[0]["qty"] in [10, 5]
 
     def test_list_trades_empty_session(self, client: TestClient, db_session: Session):
-        """Test GET /trades/session/{session_id} with session that has no trades."""
+        """Test GET /api/trades/session/{session_id} with session that has no trades."""
         # Create test player and session
         player = Player(nickname="TestPlayer")
         db_session.add(player)
@@ -240,7 +240,7 @@ class TestTradesRouter:
         db_session.add(session)
         db_session.commit()
 
-        response = client.get(f"/trades/session/{session_id}")
+        response = client.get(f"/api/trades/session/{session_id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -248,14 +248,14 @@ class TestTradesRouter:
         assert len(data) == 0
 
     def test_list_trades_invalid_uuid(self, client: TestClient):
-        """Test GET /trades/session/{session_id} with invalid UUID."""
-        response = client.get("/trades/session/invalid-uuid")
+        """Test GET /api/trades/session/{session_id} with invalid UUID."""
+        response = client.get("/api/trades/session/invalid-uuid")
         assert response.status_code == 422
 
     def test_list_trades_nonexistent_session(self, client: TestClient):
-        """Test GET /trades/session/{session_id} with non-existent session."""
+        """Test GET /api/trades/session/{session_id} with non-existent session."""
         non_existent_id = uuid.uuid4()
-        response = client.get(f"/trades/session/{non_existent_id}")
+        response = client.get(f"/api/trades/session/{non_existent_id}")
         assert response.status_code == 200
 
         data = response.json()

@@ -52,6 +52,11 @@ def get_eligible_dates(db: Session = Depends(get_db)):
     """Get a list of eligible month and years for stock trading."""
     return crud.get_eligible_dates(db)
 
+@router.get("/eligible_dates/roulette", response_model=Optional[dict[str, int]])
+def get_eligible_dates_roulette(db: Session = Depends(get_db)):
+    """Get a random eligible month and year for roulette selections."""
+    return crud.get_eligible_dates_roulette(db)
+
 
 @router.get("/prices/{symbol}", response_model=List[schemas.StockPrice])
 def get_stock_prices(symbol: str, start_date: str, end_date: str, db: Session = Depends(get_db)):

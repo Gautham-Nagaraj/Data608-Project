@@ -6,14 +6,15 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+defineOptions({ name: 'StockRouletteGame' })
 import { ref } from 'vue'
 import api from '@/services/api'
 
 const sessionId = ref(null)
 
 async function startSession() {
-  const res = await api.post('/start-session')  // Adjust endpoint as needed
+  const res = await api.post('/start-session') // Adjust endpoint as needed
   sessionId.value = res.data.session_id
 }
 </script>

@@ -6,6 +6,9 @@ from sqlalchemy import pool
 
 from alembic import context
 
+# Import your models for autogenerate
+from app.models import Base
+
 # Alembic Config object
 config = context.config
 
@@ -18,8 +21,8 @@ if database_url:
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import target_metadata from your models if needed
-target_metadata = None  # Update this if using autogenerate
+# Import target_metadata from your models for autogenerate
+target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""

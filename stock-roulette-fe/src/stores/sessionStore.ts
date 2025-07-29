@@ -4,7 +4,24 @@ export const useSessionStore = defineStore('session', {
   state: () => ({
     sessionId: '',
     selectedStocks: [] as string[],
-    gameResult: null as any,
+    gameResult: null as {
+      total_score?: number
+      final_cash?: number
+      portfolio_value?: number
+      session_id?: string
+      player_name?: string
+      [key: string]: unknown
+    } | null,
+    gameData: null as {
+      date: { month: number; year: number }
+      stockDetails: Array<{
+        ticker: string
+        type: string
+        companyName?: string
+        sector?: string
+      }>
+      playerName?: string
+    } | null,
   }),
   actions: {
     setSessionId(id: string) {
@@ -13,8 +30,31 @@ export const useSessionStore = defineStore('session', {
     setSelectedStocks(stocks: string[]) {
       this.selectedStocks = stocks
     },
-    setGameResult(result: any) {
+    setGameResult(
+      result: {
+        total_score?: number
+        final_cash?: number
+        portfolio_value?: number
+        session_id?: string
+        player_name?: string
+        [key: string]: unknown
+      } | null,
+    ) {
       this.gameResult = result
+    },
+    setGameData(
+      data: {
+        date: { month: number; year: number }
+        stockDetails: Array<{
+          ticker: string
+          type: string
+          companyName?: string
+          sector?: string
+        }>
+        playerName?: string
+      } | null,
+    ) {
+      this.gameData = data
     },
   },
 })

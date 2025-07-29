@@ -12,7 +12,10 @@ router = APIRouter()
 
 @router.post("/player", response_model=schemas.Player)
 def post_player(player_in: schemas.PlayerCreate, db: Session = Depends(get_db)):
-    return crud.create_player(db, player_in)
+    try:
+        return crud.create_player(db, player_in)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/players", response_model=List[schemas.Player])

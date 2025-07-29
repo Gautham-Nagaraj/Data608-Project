@@ -24,3 +24,10 @@ INSERT INTO stocks (symbol, company_name, sector, category) VALUES
 ('KO', 'The Coca-Cola Company', 'Consumer Staples', 'sector'),
 ('XOM', 'Exxon Mobil Corporation', 'Energy', 'sector')
 ON CONFLICT (symbol) DO NOTHING;
+
+-- Create default admin user (admin/data608)
+-- This will only run after the migrations have created the admin_users table
+INSERT INTO admin_users (login, password_hash) VALUES (
+    'admin',
+    '$2b$12$L8gwIfmvPQnfrfJ9if0uSe2FM/uGH.SsTjpNgUG6jhfLMDRhqQZBG'
+) ON CONFLICT (login) DO NOTHING;
