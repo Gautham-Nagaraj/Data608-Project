@@ -1,0 +1,35 @@
+# Docker Compose for Stock Roulette Frontend
+version: '3.8'
+
+services:
+  frontend:
+    build: .
+    container_name: stock-roulette-fe
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=production
+      - VITE_HOST=0.0.0.0
+      - VITE_PORT=5173
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - /app/node_modules
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  nginx:
+    image: nginx:alpine
+    container_name: stock-roulette-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+    restart: unless-stopped
