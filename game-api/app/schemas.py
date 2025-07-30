@@ -87,6 +87,9 @@ class Selection(SelectionCreate):
     id: int
     session_id: UUID
 
+class SelectionUpdate(Selection):
+    current_date: datetime
+
 
 # Trades
 class TradeBase(ORMModel):

@@ -92,6 +92,19 @@ async def stream_prices(websocket: WebSocket, session_id: str):
             for date_index in range(len(sorted_dates)):
                 try:
                     current_date = sorted_dates[date_index]
+                    # Update the current_date in the selection
+                    from app.schemas import SelectionUpdate
+                    selection_update = SelectionUpdate(
+                        current_date=datetime.combine(current_date, datetime.min.time()),
+                        popular_symbol=selection.popular_symbol,
+                        volatile_symbol=selection.volatile_symbol,
+                        sector_symbol=selection.sector_symbol,
+                        month=selection.month,
+                        year=selection.year,
+                        id=selection.id,
+                        session_id=selection.session_id
+                    )
+                    crud.update_selection(db, session_uuid, selection_update)
                     
                     # Prepare the price data for the current date
                     price_data = []

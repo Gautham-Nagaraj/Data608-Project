@@ -22,6 +22,7 @@ export const useSessionStore = defineStore('session', {
       }>
       playerName?: string
     } | null,
+    webSocket: null as WebSocket | null,
   }),
   actions: {
     setSessionId(id: string) {
@@ -55,6 +56,15 @@ export const useSessionStore = defineStore('session', {
       } | null,
     ) {
       this.gameData = data
+    },
+    setWebSocket(socket: WebSocket | null) {
+      this.webSocket = socket
+    },
+    closeWebSocket() {
+      if (this.webSocket) {
+        this.webSocket.close()
+        this.webSocket = null
+      }
     },
   },
 })

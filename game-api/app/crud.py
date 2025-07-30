@@ -5,10 +5,11 @@ import uuid
 import logging
 
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func, desc
+from sqlalchemy import text, func, desc, extract
 
 from app import models, schemas
 from collections import defaultdict
+from datetime import date
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -434,6 +435,16 @@ def set_selection(db: Session, session_id: uuid.UUID, selection: schemas.Selecti
 
 def get_selection(db: Session, session_id: uuid.UUID):
     return db.query(models.SessionSelection).filter(models.SessionSelection.session_id == session_id).first()
+
+def update_selection(db: Session, session_id: uuid.UUID, session_update: schemas.SelectionUpdate):
+    db_session = db.query(models.SessionSelection).filter(models.SessionSelection.session_id == session_id).first()
+    if not db_session:
+        return None
+    for field, value in session_update.model_dump(exclude_unset=True).items():
+        setattr(db_session, field, value)
+    db.commit()
+    db.refresh(db_session)
+    return db_session
 
 def get_roulette_selection(db: Session, month: int, year: int):
     """Get the roulette selection for a specific month and year."""
@@ -881,3 +892,11 @@ def generate_feedback_messages(score, unsold_shares, total_unsold_value):
         feedback.append("🐌 Low trading activity - be more active to increase your score!")
     
     return feedback
+
+def get_selected_tickers_for_session(session_id: str, db: Session) -> list[str]:
+    # Query your selections table (e.g. Selections model)
+    selections = db.query(models.Selection).filter(
+        models.Selection.session_id == session_id
+    ).all()
+    return [s.symbol for s in selections]
+

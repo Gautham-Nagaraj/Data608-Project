@@ -46,12 +46,14 @@ chmod +x deploy.sh
 ### 3. Access Your Application
 
 After successful deployment, your application will be available at:
+
 - `http://your-ec2-public-ip` (via nginx reverse proxy)
 - `http://your-ec2-public-ip:5173` (direct access)
 
 ## What the Scripts Do
 
 ### setup.sh
+
 - Updates system packages
 - Installs Node.js (LTS version)
 - Installs PM2 for process management
@@ -62,6 +64,7 @@ After successful deployment, your application will be available at:
 - Optionally installs Docker
 
 ### deploy.sh
+
 - Clones/updates the project repository
 - Installs project dependencies
 - Runs code quality checks (linting, type checking)
@@ -73,6 +76,7 @@ After successful deployment, your application will be available at:
 ## Management Commands
 
 ### PM2 Commands
+
 ```bash
 pm2 list                          # List all processes
 pm2 restart stock-roulette-fe     # Restart the application
@@ -82,6 +86,7 @@ pm2 monit                         # Real-time monitoring dashboard
 ```
 
 ### Systemd Commands
+
 ```bash
 sudo systemctl status stock-roulette-fe    # Check service status
 sudo systemctl restart stock-roulette-fe   # Restart the service
@@ -90,6 +95,7 @@ sudo journalctl -u stock-roulette-fe -f    # View service logs
 ```
 
 ### Nginx Commands
+
 ```bash
 sudo systemctl status nginx       # Check nginx status
 sudo systemctl restart nginx      # Restart nginx
@@ -99,6 +105,7 @@ sudo nginx -t                     # Test nginx configuration
 ## Troubleshooting
 
 ### Check Application Status
+
 ```bash
 # Check if the application is running
 pm2 list
@@ -110,6 +117,7 @@ sudo journalctl -u stock-roulette-fe -f
 ```
 
 ### Check Network Connectivity
+
 ```bash
 # Test if the application is responding locally
 curl http://localhost:5173
@@ -121,10 +129,12 @@ curl http://localhost
 ### Common Issues
 
 1. **Port 5173 not accessible externally**
+
    - Ensure EC2 security group allows inbound traffic on port 5173
    - Check UFW firewall: `sudo ufw status`
 
 2. **Application not starting**
+
    - Check Node.js version: `node --version`
    - Verify dependencies: `npm list`
    - Check PM2 logs: `pm2 logs stock-roulette-fe`
@@ -143,6 +153,7 @@ curl http://localhost
 ## Resource Usage
 
 This setup is optimized for AWS EC2 free tier:
+
 - Single PM2 instance
 - Memory limit set to 1GB
 - Basic nginx configuration
@@ -151,6 +162,7 @@ This setup is optimized for AWS EC2 free tier:
 ## Updates
 
 To update the application:
+
 ```bash
 ./deploy.sh
 ```

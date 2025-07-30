@@ -6,7 +6,7 @@
       <div class="score-display">
         <h3>🏆 Final Score</h3>
         <div class="total-score">
-          ${{
+          {{
             typeof gameResult.total_score === 'number' ? gameResult.total_score.toFixed(2) : '0.00'
           }}
         </div>
@@ -43,6 +43,20 @@
               }}</span
             >
           </div>
+          <div class="detail-item" v-if="gameResult.total_trades">
+            <span class="label">Total Trades:</span>
+            <span class="value">{{ gameResult.total_trades }}</span>
+          </div>
+          <div class="detail-item" v-if="gameResult.total_profit">
+            <span class="label">Total Profit:</span>
+            <span class="value"
+              >${{
+                typeof gameResult.total_profit === 'number'
+                  ? gameResult.total_profit.toFixed(2)
+                  : '0.00'
+              }}</span
+            >
+          </div>
         </div>
       </div>
 
@@ -71,6 +85,9 @@ const store = useSessionStore()
 const gameResult = store.gameResult
 
 function playAgain() {
+  // Close any existing WebSocket connection before starting a new game
+  store.closeWebSocket()
+
   // Clear the session data and navigate to home
   store.setGameResult(null)
   store.setSessionId('')

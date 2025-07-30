@@ -61,6 +61,7 @@ class SessionSelection(Base):
     sector_symbol = Column(String, ForeignKey('stocks.symbol'), nullable=False)
     month = Column(Integer, nullable=False)
     year = Column(Integer, nullable=False)
+    current_date = Column(DateTime, nullable=True)
 
 
 class Trade(Base):

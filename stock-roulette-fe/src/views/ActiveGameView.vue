@@ -38,14 +38,20 @@
         </ul>
       </div>
       <div class="debug-item"><strong>Chart Update Key:</strong> {{ chartDataKey }}</div>
-      <div class="debug-item">
-        <strong>Mock Data Running:</strong> {{ isMockDataRunning ? 'Yes' : 'No' }}
-      </div>
       <button @click="toggleDebugPanel" class="debug-toggle">Hide Debug</button>
     </div>
 
     <div v-else class="debug-toggle-container">
       <button @click="toggleDebugPanel" class="debug-toggle">Show Debug</button>
+    </div>
+
+    <!-- Trading Error Display -->
+    <div v-if="tradingError" class="trading-error-banner">
+      <div class="error-content">
+        <span class="error-icon">💸</span>
+        <span class="error-message">{{ tradingError }}</span>
+        <button @click="clearTradingError" class="close-error-btn">×</button>
+      </div>
     </div>
 
     <div class="charts-container">
@@ -68,33 +74,158 @@
           <div :id="`chart-${index}`" class="plotly-chart" :key="chartDataKey"></div>
         </div>
         <div class="trading-controls">
-          <div class="trade-input-group">
-            <label>Quantity:</label>
-            <input
-              type="number"
-              :id="`quantity-${stock.ticker}`"
-              min="1"
-              :max="getMaxBuyQuantity(stock.ticker)"
-              placeholder="1"
-              class="quantity-input"
-            />
+          <div class="trade-input-section">
+            <div class="trade-input-group">
+              <label for="`quantity-${stock.ticker}`">Quantity:</label>
+              <div class="input-with-buttons">
+                <input
+                  type="number"
+                  :id="`quantity-${stock.ticker}`"
+                  min="1"
+                  :max="getMaxBuyQuantity(stock.ticker)"
+                  placeholder="1"
+                  class="quantity-input"
+                />
+                <div class="max-buttons">
+                  <button
+                    v-if="canBuyStock(stock.ticker)"
+                    @click="setMaxBuyQuantity(stock.ticker)"
+                    class="max-btn buy-max"
+                    type="button"
+                  >
+                    Max Buy
+                  </button>
+                  <button
+                    v-if="canSellStock(stock.ticker)"
+                    @click="setMaxSellQuantity(stock.ticker)"
+                    class="max-btn sell-max"
+                    type="button"
+                  >
+                    Max Sell
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="trade-hints">
+              <div class="buy-hint" v-if="canBuyStock(stock.ticker)">
+                <span class="hint-label">Max buy:</span>
+                <span class="hint-value">{{ getMaxBuyQuantity(stock.ticker) }} shares</span>
+              </div>
+              <div class="sell-hint" v-if="canSellStock(stock.ticker)">
+                <span class="hint-label">Max sell:</span>
+                <span class="hint-value">{{ getMaxSellQuantity(stock.ticker) }} shares</span>
+              </div>
+              <div
+                class="no-trade-hint"
+                v-if="!canBuyStock(stock.ticker) && !canSellStock(stock.ticker)"
+              >
+                <span class="hint-text">Insufficient funds & no shares owned</span>
+              </div>
+            </div>
           </div>
           <div class="trade-buttons">
             <button
               @click="buyStock(stock.ticker)"
               :disabled="!canBuyStock(stock.ticker)"
               class="buy-btn"
+              :title="
+                canBuyStock(stock.ticker)
+                  ? `Buy up to ${getMaxBuyQuantity(stock.ticker)} shares`
+                  : 'Insufficient funds'
+              "
             >
-              Buy
+              💰 Buy
             </button>
             <button
               @click="sellStock(stock.ticker)"
               :disabled="!canSellStock(stock.ticker)"
               class="sell-btn"
+              :title="
+                canSellStock(stock.ticker)
+                  ? `Sell up to ${getMaxSellQuantity(stock.ticker)} shares`
+                  : 'No shares owned'
+              "
             >
-              Sell
+              💸 Sell
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Trading Advice Section -->
+    <div class="advice-section">
+      <div class="advice-header">
+        <h3>🤖 AI Trading Advisor</h3>
+        <div class="advice-controls">
+          <button
+            @click="getAIAdvice"
+            :disabled="isLoadingAdvice || stocks.length === 0"
+            class="advice-btn"
+          >
+            {{ isLoadingAdvice ? '🔄 AI Analyzing...' : '🎯 Get AI Advice' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Debug Info for AI Advice -->
+      <div v-if="showDebugPanel" class="advice-debug">
+        <h5>🔧 AI Advice Debug Info</h5>
+        <div class="debug-item"><strong>Session ID:</strong> {{ sessionId || 'None' }}</div>
+        <div class="debug-item">
+          <strong>Available Stocks:</strong> {{ stocks.map((s) => s.ticker).join(', ') || 'None' }}
+        </div>
+        <div class="debug-item">
+          <strong>API Endpoint:</strong> POST /sessions/{{ sessionId }}/advise
+        </div>
+        <div class="debug-item">
+          <strong>Last Response:</strong>
+          <pre v-if="lastAdviceResponse">{{ JSON.stringify(lastAdviceResponse, null, 2) }}</pre>
+          <span v-else>No response yet</span>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="isLoadingAdvice" class="advice-loading">
+        <div class="loading-spinner"></div>
+        <p>AI is analyzing market trends and your portfolio...</p>
+      </div>
+
+      <!-- Error State -->
+      <div v-if="adviceError" class="advice-error">
+        <p>❌ {{ adviceError }}</p>
+        <button @click="clearAdviceError" class="clear-error-btn">Clear</button>
+      </div>
+
+      <!-- Advice Results -->
+      <div v-if="tradingAdvice.length > 0 && !isLoadingAdvice" class="advice-results">
+        <h4>💡 Trading Recommendations</h4>
+        <div class="advice-cards">
+          <div
+            v-for="advice in tradingAdvice"
+            :key="advice.symbol"
+            class="advice-card"
+            :class="getAdviceActionClass(advice.action)"
+          >
+            <div class="advice-card-header">
+              <span class="stock-symbol">{{ advice.symbol }}</span>
+              <span class="advice-action" :class="getAdviceActionClass(advice.action)">
+                {{ advice.action }}
+              </span>
+            </div>
+            <div class="advice-reason">
+              {{ advice.reason }}
+            </div>
+            <div class="current-position">
+              Currently own: {{ stockOwned[advice.symbol] || 0 }} shares
+            </div>
+          </div>
+        </div>
+        <div class="advice-disclaimer">
+          <small
+            >⚠️ This is AI-generated advice for educational purposes. Always do your own
+            research.</small
+          >
         </div>
       </div>
     </div>
@@ -143,10 +274,27 @@ const connectionStatus = ref({
   class: 'status-connecting',
 })
 
+// AI Trading Advice state
+const tradingAdvice = ref<
+  Array<{
+    symbol: string
+    action: 'BUY' | 'SELL' | 'HOLD'
+    reason: string
+  }>
+>([])
+const isLoadingAdvice = ref(false)
+const adviceError = ref('')
+const lastAdviceResponse = ref<object | null>(null)
+
+// Trading error state for user-friendly error messages
+const tradingError = ref('')
+
+// AI advice throttling
+let lastAdviceRequestTime = 0
+const ADVICE_THROTTLE_MS = 5000 // 5 seconds between automatic advice requests
+
 let socket: WebSocket | null = null
 let dayUpdateInterval: number | null = null
-let mockDataInterval: number | null = null
-let isMockDataRunning = false
 
 onMounted(() => {
   // Get session data from store
@@ -188,15 +336,13 @@ watch(chartDataKey, (newKey) => {
 onUnmounted(() => {
   if (socket) {
     socket.close()
+    socket = null
   }
+  // Clear WebSocket from store
+  store.setWebSocket(null)
   if (dayUpdateInterval) {
     clearInterval(dayUpdateInterval)
     dayUpdateInterval = null
-  }
-  if (mockDataInterval) {
-    clearInterval(mockDataInterval)
-    mockDataInterval = null
-    isMockDataRunning = false
   }
 })
 
@@ -265,6 +411,9 @@ function connectWebSocket() {
 
   connectionStatus.value = { text: '🔌 Connecting...', class: 'status-connecting' }
   socket = new WebSocket(wsUrl)
+
+  // Store the WebSocket reference in the session store
+  store.setWebSocket(socket)
 
   socket.onopen = () => {
     console.log('✅ WebSocket connected successfully')
@@ -383,6 +532,10 @@ function connectWebSocket() {
         console.log(
           `🔄 Chart update triggered for ${Object.values(priceHistory.value).map((prices) => prices.length)} data points`,
         )
+
+        // Automatically get AI advice when new stock prices are received
+        console.log('🤖 New stock prices received, automatically requesting AI advice...')
+        getAIAdviceThrottled()
       } else {
         // Handle legacy single ticker format (fallback)
         if (!data.ticker || data.price === undefined) {
@@ -430,6 +583,12 @@ function connectWebSocket() {
           updateAllCharts()
         })
         console.log(`🔄 Legacy format chart update triggered`)
+
+        // Automatically get AI advice when new stock prices are received
+        console.log(
+          '🤖 New stock price received (legacy format), automatically requesting AI advice...',
+        )
+        getAIAdviceThrottled()
       }
     } catch (error) {
       console.error('❌ Error parsing WebSocket message:', error)
@@ -444,13 +603,6 @@ function connectWebSocket() {
     console.log('🔄 Was clean close:', event.wasClean)
 
     connectionStatus.value = { text: '❌ Disconnected', class: 'status-disconnected' }
-
-    // If WebSocket fails, start mock data for demo purposes
-    if (!isMockDataRunning) {
-      console.log('🎭 Starting mock data as fallback')
-      connectionStatus.value = { text: '🎭 Using Mock Data', class: 'status-mock' }
-      startMockData()
-    }
   }
 
   socket.onerror = (error) => {
@@ -459,93 +611,7 @@ function connectWebSocket() {
     console.log('🔌 WebSocket state:', socket?.readyState)
 
     connectionStatus.value = { text: '⚠️ Connection Error', class: 'status-error' }
-
-    // If WebSocket fails, start mock data for demo purposes
-    if (!isMockDataRunning) {
-      console.log('🎭 Starting mock data due to WebSocket error')
-      connectionStatus.value = { text: '🎭 Using Mock Data', class: 'status-mock' }
-      startMockData()
-    }
   }
-}
-
-function startMockData() {
-  // Prevent multiple mock data sessions
-  if (isMockDataRunning) {
-    console.log('🎭 Mock data already running, skipping...')
-    return
-  }
-
-  // Generate mock price data for demo purposes
-  console.log('🎭 Starting mock data for demo...')
-  console.log(
-    '📈 Stocks to generate data for:',
-    stocks.value.map((s) => s.ticker),
-  )
-  isMockDataRunning = true
-
-  // Initialize with some starting prices
-  stocks.value.forEach((stock) => {
-    const basePrice = Math.random() * 100 + 50 // Random price between 50-150
-    priceHistory.value[stock.ticker] = [basePrice]
-    console.log(`💰 Initial mock price for ${stock.ticker}: $${basePrice.toFixed(2)}`)
-  })
-
-  dateLabels.value = ['2024-01-01'] // Start with actual date format
-
-  // Force initial chart creation with mock data
-  nextTick(() => {
-    createAllCharts()
-    chartDataKey.value++
-  })
-  console.log('📅 Initialized mock data with 2024-01-01')
-
-  // Add new price data every 10 seconds for demo
-  mockDataInterval = setInterval(() => {
-    console.log('🎭 Generating mock price update...')
-
-    stocks.value.forEach((stock) => {
-      const currentPrices = priceHistory.value[stock.ticker]
-      const lastPrice = currentPrices[currentPrices.length - 1]
-
-      // Generate realistic price movement (±5% change)
-      const changePercent = (Math.random() - 0.5) * 0.1 // ±5%
-      const newPrice = lastPrice * (1 + changePercent)
-      const finalPrice = Math.max(newPrice, 1) // Minimum price of $1
-
-      priceHistory.value[stock.ticker].push(finalPrice)
-      console.log(
-        `📈 Mock price update for ${stock.ticker}: $${lastPrice.toFixed(2)} → $${finalPrice.toFixed(2)} (${changePercent > 0 ? '+' : ''}${(changePercent * 100).toFixed(2)}%)`,
-      )
-    })
-
-    // Generate a mock date (starting from a base date and incrementing)
-    const baseDate = new Date('2024-01-01')
-    const dayOffset = dateLabels.value.length
-    const currentDate = new Date(baseDate.getTime() + dayOffset * 24 * 60 * 60 * 1000)
-    const dateStr = currentDate.toISOString().split('T')[0] // YYYY-MM-DD format
-
-    const newDay = dateLabels.value.length + 1
-    dateLabels.value.push(dateStr)
-
-    // Force immediate chart update
-    nextTick(() => {
-      updateAllCharts()
-      chartDataKey.value++
-    })
-
-    console.log(`📅 Mock data: Added ${dateStr} (Day ${newDay}), chart key: ${chartDataKey.value}`)
-
-    // Stop after 30 days for demo
-    if (dateLabels.value.length >= 30) {
-      console.log('🏁 Mock data complete (30 days reached)')
-      if (mockDataInterval) {
-        clearInterval(mockDataInterval)
-        mockDataInterval = null
-        isMockDataRunning = false
-      }
-    }
-  }, 10000) // Every 10 seconds
 }
 
 function createPlotlyChart(ticker: string, index: number) {
@@ -656,12 +722,6 @@ function updatePlotlyChart(ticker: string, index: number) {
   } else if (chartElement && prices.length === 0) {
     console.log(`📊 No data yet for ${ticker}, skipping update`)
   }
-}
-
-function updateAllCharts() {
-  stocks.value.forEach((stock, index) => {
-    updatePlotlyChart(stock.ticker, index)
-  })
 }
 
 function createAllCharts() {
@@ -776,6 +836,24 @@ function getMaxBuyQuantity(ticker: string): number {
   return Math.floor(playerCash.value / currentPrice)
 }
 
+function getMaxSellQuantity(ticker: string): number {
+  return stockOwned.value[ticker] || 0
+}
+
+function setMaxBuyQuantity(ticker: string): void {
+  const quantityInput = document.getElementById(`quantity-${ticker}`) as HTMLInputElement
+  if (quantityInput) {
+    quantityInput.value = getMaxBuyQuantity(ticker).toString()
+  }
+}
+
+function setMaxSellQuantity(ticker: string): void {
+  const quantityInput = document.getElementById(`quantity-${ticker}`) as HTMLInputElement
+  if (quantityInput) {
+    quantityInput.value = getMaxSellQuantity(ticker).toString()
+  }
+}
+
 function canBuyStock(ticker: string): boolean {
   const currentPrice = parseFloat(getCurrentPrice(ticker))
   return currentPrice > 0 && playerCash.value >= currentPrice
@@ -792,17 +870,19 @@ function buyStock(ticker: string): void {
   const totalCost = quantity * currentPrice
 
   if (quantity <= 0) {
-    alert('Please enter a valid quantity')
+    showTradingError('Please enter a valid quantity (1 or more shares)')
     return
   }
 
   if (totalCost > playerCash.value) {
-    alert('Insufficient funds')
+    showTradingError(
+      `Oops! You need $${totalCost.toFixed(2)} but only have $${playerCash.value.toFixed(2)} available`,
+    )
     return
   }
 
   if (!canBuyStock(ticker)) {
-    alert('Cannot buy this stock')
+    showTradingError('This stock is currently unavailable for purchase')
     return
   }
 
@@ -830,17 +910,19 @@ function sellStock(ticker: string): void {
   const totalValue = quantity * currentPrice
 
   if (quantity <= 0) {
-    alert('Please enter a valid quantity')
+    showTradingError('Please enter a valid quantity (1 or more shares)')
     return
   }
 
   if (quantity > (stockOwned.value[ticker] || 0)) {
-    alert('Insufficient shares to sell')
+    showTradingError(
+      `You only own ${stockOwned.value[ticker] || 0} shares of ${ticker}, but tried to sell ${quantity}`,
+    )
     return
   }
 
   if (!canSellStock(ticker)) {
-    alert("You don't own any shares of this stock")
+    showTradingError(`You don't own any shares of ${ticker} to sell`)
     return
   }
 
@@ -914,20 +996,208 @@ function toggleDebugPanel() {
   showDebugPanel.value = !showDebugPanel.value
 }
 
+// Chart Update Functions
+function updateAllCharts() {
+  console.log('📊 Executing chart update')
+  stocks.value.forEach((stock, index) => {
+    updatePlotlyChart(stock.ticker, index)
+  })
+}
+
+// AI Trading Advice Functions
+// Throttled version for automatic calls to prevent too many requests
+function getAIAdviceThrottled() {
+  const now = Date.now()
+  if (now - lastAdviceRequestTime < ADVICE_THROTTLE_MS) {
+    console.log('🤖 Throttling AI advice request, too soon since last request')
+    return
+  }
+
+  lastAdviceRequestTime = now
+  console.log('🤖 Throttled AI advice request approved, making call...')
+
+  getAIAdvice().catch((error) => {
+    console.warn('⚠️ Throttled AI advice request failed:', error)
+    // Don't show error to user for automatic requests
+  })
+}
+
+async function getAIAdvice() {
+  if (!sessionId.value) {
+    adviceError.value = 'No active session found'
+    console.warn('🤖 No session ID available for AI advice request')
+    return
+  }
+
+  if (stocks.value.length === 0) {
+    adviceError.value = 'No stocks selected for this session'
+    console.warn('🤖 No stocks available for AI advice request')
+    return
+  }
+
+  isLoadingAdvice.value = true
+  adviceError.value = ''
+  tradingAdvice.value = []
+
+  try {
+    console.log('🤖 Requesting AI advice for session:', sessionId.value)
+    console.log(
+      '🤖 Available stocks:',
+      stocks.value.map((s) => s.ticker),
+    )
+    console.log('🤖 API endpoint:', `/api/sessions/${sessionId.value}/advise`)
+
+    const response = await api.post(`/api/sessions/${sessionId.value}/advise`)
+    console.log('✅ AI advice response status:', response.status)
+    console.log('✅ AI advice response data:', response.data)
+
+    // Store response for debugging
+    lastAdviceResponse.value = response.data
+
+    // Handle the advice field - it can be either an array or a JSON string
+    if (response.data && response.data.advice) {
+      console.log('🔍 Raw advice data:', response.data.advice)
+
+      let recommendations: Array<{
+        symbol: string
+        action: 'BUY' | 'SELL' | 'HOLD'
+        reason: string
+      }>
+
+      // Check if advice is already an array (new format)
+      if (Array.isArray(response.data.advice)) {
+        console.log('✅ Advice is already an array, using directly')
+        recommendations = response.data.advice
+      } else if (typeof response.data.advice === 'string') {
+        console.log('🔍 Advice is a string, attempting to parse as JSON')
+
+        // Clean the advice string - remove markdown code blocks if present
+        let cleanAdvice = response.data.advice.trim()
+
+        // Check if the response is wrapped in markdown code blocks
+        if (cleanAdvice.startsWith('```json') && cleanAdvice.endsWith('```')) {
+          console.log('🧹 Removing markdown code blocks from advice response')
+          cleanAdvice = cleanAdvice.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanAdvice.startsWith('```') && cleanAdvice.endsWith('```')) {
+          console.log('🧹 Removing generic code blocks from advice response')
+          cleanAdvice = cleanAdvice.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        console.log('🔍 Cleaned advice string:', cleanAdvice)
+
+        try {
+          recommendations = JSON.parse(cleanAdvice)
+        } catch (parseError) {
+          console.error('❌ Error parsing advice JSON:', parseError)
+          console.error('❌ Raw advice data:', response.data.advice)
+          console.error('❌ Cleaned advice data:', cleanAdvice)
+          throw new Error('Failed to parse AI advice response')
+        }
+      } else {
+        throw new Error('Invalid advice format: expected array or string')
+      }
+
+      console.log('💡 Processing trading recommendations:', recommendations)
+
+      // Validate the recommendations structure
+      if (Array.isArray(recommendations) && recommendations.length > 0) {
+        // Ensure each recommendation has required fields
+        const validRecommendations = recommendations.filter(
+          (rec) => rec.symbol && rec.action && rec.reason,
+        )
+
+        if (validRecommendations.length > 0) {
+          tradingAdvice.value = validRecommendations
+          console.log('✅ Successfully set trading advice:', validRecommendations)
+        } else {
+          throw new Error('No valid recommendations found in response')
+        }
+      } else {
+        throw new Error('Invalid recommendations format: expected non-empty array')
+      }
+    } else {
+      console.error('❌ No advice field in response:', response.data)
+      throw new Error('No advice data received from API')
+    }
+  } catch (error: unknown) {
+    console.error('❌ Error getting AI advice:', error)
+
+    // Handle specific HTTP error codes
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as {
+        response?: { status?: number; data?: { detail?: string; message?: string } }
+      }
+      console.error('❌ Axios error details:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+      })
+
+      if (axiosError.response?.status === 404) {
+        adviceError.value = 'Session not found. Please start a new game.'
+      } else if (axiosError.response?.status === 400) {
+        adviceError.value = 'No stocks selected yet for this session.'
+      } else if (axiosError.response?.status === 500) {
+        adviceError.value = 'Price history missing for selected stocks. Please wait for more data.'
+      } else {
+        const errorMsg =
+          axiosError.response?.data?.detail ||
+          axiosError.response?.data?.message ||
+          'Failed to get AI advice. Please try again.'
+        adviceError.value = errorMsg
+      }
+    } else if (error instanceof Error) {
+      adviceError.value = error.message
+    } else {
+      adviceError.value = 'Failed to get AI advice. Please try again.'
+    }
+  } finally {
+    isLoadingAdvice.value = false
+  }
+}
+
+function clearAdviceError() {
+  adviceError.value = ''
+}
+
+function clearTradingError() {
+  tradingError.value = ''
+}
+
+function showTradingError(message: string) {
+  tradingError.value = message
+  // Auto-clear the error after 5 seconds
+  setTimeout(() => {
+    if (tradingError.value === message) {
+      tradingError.value = ''
+    }
+  }, 5000)
+}
+
+function getAdviceActionClass(action: string): string {
+  switch (action.toUpperCase()) {
+    case 'BUY':
+      return 'advice-buy'
+    case 'SELL':
+      return 'advice-sell'
+    case 'HOLD':
+      return 'advice-hold'
+    default:
+      return 'advice-neutral'
+  }
+}
+
 async function endGame() {
   // Stop intervals and close connections
   if (dayUpdateInterval) {
     clearInterval(dayUpdateInterval)
     dayUpdateInterval = null
   }
-  if (mockDataInterval) {
-    clearInterval(mockDataInterval)
-    mockDataInterval = null
-    isMockDataRunning = false
-  }
   if (socket) {
     socket.close()
+    socket = null
   }
+  // Clear WebSocket from store
+  store.setWebSocket(null)
   const error = ref('')
   try {
     const session_resp = await api.post('api/sessions/' + sessionId.value + '/end')
@@ -1020,11 +1290,6 @@ async function endGame() {
 .status-error {
   color: #ff4757 !important;
   border-color: rgba(255, 71, 87, 0.3) !important;
-}
-
-.status-mock {
-  color: #a55eea !important;
-  border-color: rgba(165, 94, 234, 0.3) !important;
 }
 
 .status-complete {
@@ -1219,8 +1484,12 @@ async function endGame() {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.trade-input-group {
+.trade-input-section {
   margin-bottom: 0.75rem;
+}
+
+.trade-input-group {
+  margin-bottom: 0.5rem;
 }
 
 .trade-input-group label {
@@ -1233,8 +1502,14 @@ async function endGame() {
   letter-spacing: 0.5px;
 }
 
+.input-with-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
 .quantity-input {
-  width: 100%;
+  flex: 1;
   padding: 0.5rem;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(0, 245, 255, 0.3);
@@ -1248,6 +1523,101 @@ async function endGame() {
   outline: none;
   border-color: #00f5ff;
   box-shadow: 0 0 10px rgba(0, 245, 255, 0.3);
+}
+
+.max-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.max-btn {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Orbitron', monospace;
+  white-space: nowrap;
+}
+
+.buy-max {
+  background: rgba(46, 213, 115, 0.8);
+  color: white;
+  border: 1px solid rgba(46, 213, 115, 0.5);
+}
+
+.buy-max:hover {
+  background: rgba(46, 213, 115, 1);
+  transform: translateY(-1px);
+}
+
+.sell-max {
+  background: rgba(255, 107, 107, 0.8);
+  color: white;
+  border: 1px solid rgba(255, 107, 107, 0.5);
+}
+
+.sell-max:hover {
+  background: rgba(255, 107, 107, 1);
+  transform: translateY(-1px);
+}
+
+.trade-hints {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.buy-hint,
+.sell-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.buy-hint {
+  border-color: rgba(46, 213, 115, 0.3);
+  background: rgba(46, 213, 115, 0.1);
+}
+
+.sell-hint {
+  border-color: rgba(255, 107, 107, 0.3);
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.no-trade-hint {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #999;
+  font-style: italic;
+}
+
+.hint-label {
+  color: #cccccc;
+  font-weight: 500;
+}
+
+.hint-value {
+  color: #00f5ff;
+  font-weight: 600;
+  font-family: 'Orbitron', monospace;
+}
+
+.hint-text {
+  color: #999;
 }
 
 .trade-buttons {
@@ -1354,6 +1724,296 @@ async function endGame() {
   left: 100%;
 }
 
+/* AI Trading Advice Styles */
+.advice-section {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin: 2rem 0;
+  border: 2px solid rgba(0, 245, 255, 0.3);
+}
+
+.advice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.advice-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.advice-header h3 {
+  font-size: 1.5rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #00f5ff;
+  margin: 0;
+  text-shadow: 0 0 15px rgba(0, 245, 255, 0.3);
+}
+
+.advice-btn {
+  background: linear-gradient(135deg, #00f5ff 0%, #0084ff 100%);
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Orbitron', 'Courier New', monospace;
+  position: relative;
+  overflow: hidden;
+}
+
+.advice-btn.test-btn {
+  background: linear-gradient(135deg, #a55eea 0%, #8854d0 100%);
+}
+
+.advice-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 245, 255, 0.4);
+}
+
+.advice-btn.test-btn:hover:not(:disabled) {
+  box-shadow: 0 10px 25px rgba(165, 94, 234, 0.4);
+}
+
+.advice-debug {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(165, 94, 234, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.advice-debug h5 {
+  color: #a55eea;
+  font-weight: 700;
+  margin: 0 0 1rem 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.advice-debug .debug-item {
+  margin-bottom: 0.75rem;
+}
+
+.advice-debug .debug-item strong {
+  color: #a55eea;
+  display: inline-block;
+  min-width: 120px;
+}
+
+.advice-debug pre {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  color: #cccccc;
+  overflow-x: auto;
+  max-height: 200px;
+  margin: 0.5rem 0 0 0;
+}
+
+.advice-btn:disabled {
+  background: #555;
+  color: #999;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.advice-loading {
+  text-align: center;
+  padding: 2rem;
+  color: #cccccc;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 245, 255, 0.3);
+  border-top: 4px solid #00f5ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.advice-error {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.advice-error p {
+  color: #ff6b6b;
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.clear-error-btn {
+  background: rgba(255, 107, 107, 0.2);
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  color: #ff6b6b;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.clear-error-btn:hover {
+  background: rgba(255, 107, 107, 0.3);
+}
+
+.advice-results h4 {
+  color: #00f5ff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.advice-cards {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 768px) {
+  .advice-cards {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+}
+
+.advice-card {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 1rem;
+  border: 2px solid;
+  transition: all 0.3s ease;
+}
+
+.advice-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.advice-buy {
+  border-color: #2ed573;
+  background: linear-gradient(145deg, rgba(46, 213, 115, 0.1), rgba(46, 213, 115, 0.05));
+}
+
+.advice-sell {
+  border-color: #ff6b6b;
+  background: linear-gradient(145deg, rgba(255, 107, 107, 0.1), rgba(255, 107, 107, 0.05));
+}
+
+.advice-hold {
+  border-color: #ffd700;
+  background: linear-gradient(145deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.05));
+}
+
+.advice-neutral {
+  border-color: #cccccc;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+}
+
+.advice-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.stock-symbol {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: #00f5ff;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.advice-action {
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.advice-action.advice-buy {
+  background: #2ed573;
+  color: white;
+}
+
+.advice-action.advice-sell {
+  background: #ff6b6b;
+  color: white;
+}
+
+.advice-action.advice-hold {
+  background: #ffd700;
+  color: #333;
+}
+
+.advice-reason {
+  color: #cccccc;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+}
+
+.current-position {
+  color: #00f5ff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.advice-disclaimer {
+  text-align: center;
+  padding: 1rem;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+.advice-disclaimer small {
+  color: #ffd700;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .active-game-container {
@@ -1384,6 +2044,145 @@ async function endGame() {
 
   .chart-wrapper {
     height: 200px;
+  }
+
+  .advice-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .advice-header h3 {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .advice-btn {
+    width: 100%;
+  }
+
+  .advice-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Trading Error Banner Styles */
+.trading-error-banner {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: 500px;
+  width: 90%;
+  animation: slideDown 0.3s ease-out;
+}
+
+.error-content {
+  background: linear-gradient(135deg, #ff6b6b, #ffa06b);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(255, 107, 107, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.error-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.error-message {
+  flex: 1;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.close-error-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease;
+}
+
+.close-error-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Responsive styles for mobile devices */
+@media (max-width: 768px) {
+  .input-with-buttons {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .max-buttons {
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .trade-hints {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .buy-hint,
+  .sell-hint,
+  .no-trade-hint {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .trade-buttons {
+    gap: 0.75rem;
+  }
+
+  .buy-btn,
+  .sell-btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .trading-controls {
+    padding: 0.75rem;
+  }
+
+  .max-btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.65rem;
+  }
+
+  .trade-hints {
+    font-size: 0.7rem;
+  }
+
+  .quantity-input {
+    font-size: 0.85rem;
+    padding: 0.6rem;
   }
 }
 </style>
