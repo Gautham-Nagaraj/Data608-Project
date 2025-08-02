@@ -16,15 +16,11 @@ sudo apt-get update
 
 sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
 
-
 # 2. setup docker-compose
 sudo apt-get update
 sudo apt  install docker-compose -y
 
-#3 clone the repository
-git clone https://github.com/Gautham-Nagaraj/Data608-Project.git
-cd Data608-Project/stock-roulette-fe
-
-#4 run docker-compose
-sudo docker-compose up -d
+# 3. run docker-compose
+cd $HOME/Data608-Project/stock-roulette-fe
+sudo docker-compose up -d --build
 
