@@ -2,6 +2,10 @@
 
 This service implements the backend for the Stock Roulette game, providing RESTful endpoints for game sessions, stock selections, trades, and an admin dashboard.
 
+ssh connection:
+5432
+8000
+
 ## Setup
 
 1. **Clone repository**:

@@ -236,3 +236,18 @@ class PlayerStatistics(BaseModel):
 
     class Config:
         from_attributes = True
+
+class TradingAdviceItem(BaseModel):
+    symbol: str = Field(..., description="Stock symbol", example="AAPL")
+    action: str = Field(..., description="Trading action: BUY, SELL, or HOLD", example="BUY")
+    reason: str = Field(..., description="Short explanation for the recommendation", example="Strong upward trend expected")
+
+    class Config:
+        from_attributes = True
+
+
+class TradingAdviceResponse(BaseModel):
+    advice: List[TradingAdviceItem] = Field(..., description="List of trading recommendations")
+
+    class Config:
+        from_attributes = True

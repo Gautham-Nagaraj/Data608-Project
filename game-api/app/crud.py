@@ -4,8 +4,33 @@ from decimal import Decimal
 import uuid
 import logging
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text, func, desc, extract, select
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func, desc, extract
+
+from . import models, schemas
+
+
+def normalize_datetime_for_db(dt):
+    """Convert timezone-aware datetime to naive datetime for PostgreSQL storage"""
+    if isinstance(dt, datetime.datetime) and dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
+
+
+def normalize_data_for_db(data):
+    """Normalize all datetime fields in a dictionary for database storage"""
+    if isinstance(data, dict):
+        return {key: normalize_datetime_for_db(value) for key, value in data.items()}
+    return data
+from datetime import timezone
+from decimal import Decimal
+import uuid
+import logging
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text, func, desc, extract, select
+from sqlalchemy.orm import Session
 
 from app import models, schemas
 from collections import defaultdict
@@ -16,20 +41,21 @@ logger = logging.getLogger(__name__)
 
 # Players
 
-def get_player(db: Session, player_id: int):
-    return db.query(models.Player).filter(models.Player.id == player_id).first()
+async def get_player(db: AsyncSession, player_id: int):
+    result = await db.execute(select(models.Player).filter(models.Player.id == player_id))
+    return result.scalar_one_or_none()
 
 
-def create_player(db: Session, player: schemas.PlayerCreate):
+async def create_player(db: AsyncSession, player: schemas.PlayerCreate):
     db_player = models.Player(nickname=player.nickname)
     db.add(db_player)
-    db.commit()
-    db.refresh(db_player)
+    await db.commit()
+    await db.refresh(db_player)
     return db_player
 
 
-def get_players(db: Session, nickname: str = None, limit: int = None, offset: int = 0):
-    query = db.query(models.Player)
+async def get_players(db: AsyncSession, nickname: str = None, limit: int = None, offset: int = 0):
+    query = select(models.Player)
     
     # Apply nickname filter if provided
     if nickname:
@@ -41,25 +67,27 @@ def get_players(db: Session, nickname: str = None, limit: int = None, offset: in
     if limit:
         query = query.limit(limit)
     
-    return query.all()
+    result = await db.execute(query)
+    return result.scalars().all()
 
 
 # Stocks
 
-def get_stock_by_symbol(db: Session, symbol: str):
-    return db.query(models.Stock).filter(models.Stock.symbol == symbol).first()
+async def get_stock_by_symbol(db: AsyncSession, symbol: str):
+    result = await db.execute(select(models.Stock).filter(models.Stock.symbol == symbol))
+    return result.scalar_one_or_none()
 
 
-def create_stock(db: Session, stock: schemas.StockCreate):
+async def create_stock(db: AsyncSession, stock: schemas.StockCreate):
     db_stock = models.Stock(**stock.model_dump())
     db.add(db_stock)
-    db.commit()
-    db.refresh(db_stock)
+    await db.commit()
+    await db.refresh(db_stock)
     return db_stock
 
 
-def get_stocks(db: Session, category: str = None, sector: str = None, limit: int = None, offset: int = 0):
-    query = db.query(models.Stock)
+async def get_stocks(db: AsyncSession, category: str = None, sector: str = None, limit: int = None, offset: int = 0):
+    query = select(models.Stock)
     
     # Apply filters if provided
     if category:
@@ -73,21 +101,23 @@ def get_stocks(db: Session, category: str = None, sector: str = None, limit: int
     if limit:
         query = query.limit(limit)
     
-    return query.all()
+    result = await db.execute(query)
+    return result.scalars().all()
 
 
 # Admin Users
 
-def get_admin_user(db: Session, login: str):
-    return db.query(models.AdminUser).filter(models.AdminUser.login == login).first()
+async def get_admin_user(db: AsyncSession, login: str):
+    result = await db.execute(select(models.AdminUser).filter(models.AdminUser.login == login))
+    return result.scalar_one_or_none()
 
 
 # Admin-specific functions for management
 
-def get_sessions_with_filters(db: Session, player_id: int = None, status: str = None, 
+async def get_sessions_with_filters(db: AsyncSession, player_id: int = None, status: str = None, 
                             start_date = None, end_date = None, limit: int = 100, offset: int = 0):
     """Get sessions with optional filters for admin dashboard"""
-    query = db.query(models.Session)
+    query = select(models.Session)
     
     if player_id:
         query = query.filter(models.Session.player_id == player_id)
@@ -113,13 +143,19 @@ def get_sessions_with_filters(db: Session, player_id: int = None, status: str = 
     if limit:
         query = query.limit(limit)
     
-    sessions = query.all()
+    result = await db.execute(query)
+    sessions = result.scalars().all()
     
     # Enrich with player nicknames and score data
-    result = []
+    result_list = []
     for session in sessions:
-        player = db.query(models.Player).filter(models.Player.id == session.player_id).first()
-        score = db.query(models.Score).filter(models.Score.session_id == session.session_id).first()
+        # Get player
+        player_result = await db.execute(select(models.Player).filter(models.Player.id == session.player_id))
+        player = player_result.scalar_one_or_none()
+        
+        # Get score
+        score_result = await db.execute(select(models.Score).filter(models.Score.session_id == session.session_id))
+        score = score_result.scalar_one_or_none()
         
         session_data = {
             "session_id": str(session.session_id),
@@ -133,16 +169,16 @@ def get_sessions_with_filters(db: Session, player_id: int = None, status: str = 
             "total_profit": float(score.total_profit) if score else 0.0,
             "total_trades": score.total_trades if score else 0
         }
-        result.append(session_data)
+        result_list.append(session_data)
     
-    return result
+    return result_list
 
 
-def get_leaderboard(db: Session, top_n: int = 10, sort_by: str = "total_score"):
+async def get_leaderboard(db: AsyncSession, top_n: int = 10, sort_by: str = "total_score"):
     """Get top N players sorted by specified metric"""
     
     # Build query to aggregate player statistics
-    query = db.query(
+    query = select(
         models.Player.id.label("player_id"),
         models.Player.nickname,
         func.sum(models.Score.total_score).label("total_score"),
@@ -162,12 +198,13 @@ def get_leaderboard(db: Session, top_n: int = 10, sort_by: str = "total_score"):
     else:
         query = query.order_by(desc("total_score"))  # Default fallback
     
-    players = query.limit(top_n).all()
+    result = await db.execute(query.limit(top_n))
+    players = result.fetchall()
     
     # Format results
-    result = []
+    formatted_result = []
     for player in players:
-        result.append({
+        formatted_result.append({
             "player_id": player.player_id,
             "nickname": player.nickname,
             "total_score": float(player.total_score or 0),
@@ -175,7 +212,7 @@ def get_leaderboard(db: Session, top_n: int = 10, sort_by: str = "total_score"):
             "total_trades": int(player.total_trades or 0)
         })
     
-    return result
+    return formatted_result
 
 
 def get_player_statistics(db: Session):
@@ -193,7 +230,7 @@ def get_player_statistics(db: Session):
     
     # Active players (players with sessions in last 30 days)
     from datetime import timedelta
-    thirty_days_ago = datetime.datetime.now(timezone.utc) - timedelta(days=30)
+    thirty_days_ago = datetime.datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
     active_players = db.query(func.count(func.distinct(models.Session.player_id))).filter(
         models.Session.started_at >= thirty_days_ago
     ).scalar()
@@ -245,7 +282,7 @@ def archive_session(db: Session, session_id: uuid.UUID):
         if session:
             session.status = "archived"
             if not session.ended_at:
-                session.ended_at = datetime.datetime.now(timezone.utc)
+                session.ended_at = datetime.datetime.now(timezone.utc).replace(tzinfo=None)
             db.commit()
             return True
         return False
@@ -306,13 +343,8 @@ def export_database_snapshot(db: Session, tables: list = None):
 
 def create_agent_interaction(db: Session, interaction: schemas.AgentInteractionCreate):
     """Create a new agent interaction record"""
-    db_interaction = models.AgentInteraction(
-        session_id=interaction.session_id,
-        interaction_type=interaction.interaction_type,
-        content=interaction.content,
-        interaction_metadata=interaction.metadata,
-        timestamp=interaction.timestamp
-    )
+    interaction_data = normalize_data_for_db(interaction.model_dump())
+    db_interaction = models.AgentInteraction(**interaction_data)
     db.add(db_interaction)
     db.commit()
     db.refresh(db_interaction)
@@ -351,7 +383,7 @@ def get_session_chat_log(db: Session, session_id: uuid.UUID):
 
 # Admin Audit Logging
 
-def create_audit_log(db: Session, admin_login: str, action: str, target_id: str = None, 
+async def create_audit_log(db: AsyncSession, admin_login: str, action: str, target_id: str = None, 
                     details: dict = None, ip_address: str = None):
     """Create an audit log entry for admin actions"""
     db_log = models.AdminAuditLog(
@@ -360,11 +392,11 @@ def create_audit_log(db: Session, admin_login: str, action: str, target_id: str 
         target_id=target_id,
         details=details,
         ip_address=ip_address,
-        timestamp=datetime.datetime.now(timezone.utc)
+        timestamp=datetime.datetime.now(timezone.utc).replace(tzinfo=None)
     )
     db.add(db_log)
-    db.commit()
-    db.refresh(db_log)
+    await db.commit()
+    await db.refresh(db_log)
     return db_log
 
 
@@ -399,45 +431,56 @@ def get_audit_logs(db: Session, admin_login: str = None, action: str = None,
 
 # Sessions
 
-def create_session(db: Session, session: schemas.SessionCreate):
-    db_session = models.Session(**session.model_dump())
+async def create_session(db: AsyncSession, session: schemas.SessionCreate):
+    # Convert timezone-aware datetime to naive datetime for PostgreSQL
+    session_data = normalize_data_for_db(session.model_dump())
+    
+    db_session = models.Session(**session_data)
     db.add(db_session)
-    db.commit()
-    db.refresh(db_session)
+    await db.commit()
+    await db.refresh(db_session)
     return db_session
 
 
 # Helper to fetch a session by ID
 
-def get_session(db: Session, session_id: uuid.UUID):
-    return db.query(models.Session).filter(models.Session.session_id == session_id).first()
+async def get_session(db: AsyncSession, session_id: uuid.UUID):
+    result = await db.execute(select(models.Session).filter(models.Session.session_id == session_id))
+    return result.scalar_one_or_none()
 
 
-def update_session(db: Session, session_id: uuid.UUID, session_update: schemas.SessionUpdate):
-    db_session = db.query(models.Session).filter(models.Session.session_id == session_id).first()
+async def update_session(db: AsyncSession, session_id: uuid.UUID, session_update: schemas.SessionUpdate):
+    result = await db.execute(select(models.Session).filter(models.Session.session_id == session_id))
+    db_session = result.scalar_one_or_none()
     if not db_session:
         return None
-    for field, value in session_update.model_dump(exclude_unset=True).items():
+    
+    # Convert timezone-aware datetime to naive datetime for PostgreSQL
+    update_data = normalize_data_for_db(session_update.model_dump(exclude_unset=True))
+    for field, value in update_data.items():
         setattr(db_session, field, value)
-    db.commit()
-    db.refresh(db_session)
+    
+    await db.commit()
+    await db.refresh(db_session)
     return db_session
 
 
 # Selections
 
-def set_selection(db: Session, session_id: uuid.UUID, selection: schemas.SelectionCreate):
+async def set_selection(db: AsyncSession, session_id: uuid.UUID, selection: schemas.SelectionCreate):
     db_sel = models.SessionSelection(session_id=session_id, **selection.model_dump())
     db.add(db_sel)
-    db.commit()
-    db.refresh(db_sel)
+    await db.commit()
+    await db.refresh(db_sel)
     return db_sel
 
-def get_selection(db: Session, session_id: uuid.UUID):
-    return db.query(models.SessionSelection).filter(models.SessionSelection.session_id == session_id).first()
+async def get_selection(db: AsyncSession, session_id: uuid.UUID):
+    result = await db.execute(select(models.SessionSelection).filter(models.SessionSelection.session_id == session_id))
+    return result.scalar_one_or_none()
 
-def update_selection(db: Session, session_id: uuid.UUID, session_update: schemas.SelectionUpdate):
-    db_session = db.query(models.SessionSelection).filter(models.SessionSelection.session_id == session_id).first()
+async def update_selection(db: AsyncSession, session_id: uuid.UUID, session_update: schemas.SelectionUpdate):
+    result = await db.execute(select(models.SessionSelection).filter(models.SessionSelection.session_id == session_id))
+    db_session = result.scalar_one_or_none()
     if not db_session:
         return None
     for field, value in session_update.model_dump(exclude_unset=True).items():
@@ -446,7 +489,7 @@ def update_selection(db: Session, session_id: uuid.UUID, session_update: schemas
     db.refresh(db_session)
     return db_session
 
-def get_roulette_selection(db: Session, month: int, year: int):
+async def get_roulette_selection(db: AsyncSession, month: int, year: int):
     """Get the roulette selection for a specific month and year."""
     from datetime import date
     import calendar
@@ -460,10 +503,11 @@ def get_roulette_selection(db: Session, month: int, year: int):
     # A stock is available in the month if:
     # - It starts before or at the beginning of the month AND
     # - It ends after the month or has no end date
-    available_stocks = db.query(models.Stock).filter(
+    result = await db.execute(select(models.Stock).filter(
         (models.Stock.available_from <= month_start) &
         ((models.Stock.available_to >= month_end) | (models.Stock.available_to.is_(None)))
-    ).all()
+    ))
+    available_stocks = result.scalars().all()
     
     if not available_stocks:
         return None
@@ -499,33 +543,37 @@ def get_roulette_selection(db: Session, month: int, year: int):
 
 # Trades
 
-def record_trade(db: Session, trade: schemas.TradeCreate):
-    db_trade = models.Trade(**trade.model_dump())
+async def record_trade(db: AsyncSession, trade: schemas.TradeCreate):
+    trade_data = normalize_data_for_db(trade.model_dump())
+    db_trade = models.Trade(**trade_data)
     db.add(db_trade)
-    db.commit()
-    db.refresh(db_trade)
+    await db.commit()
+    await db.refresh(db_trade)
     return db_trade
 
 
-def get_trades(db: Session, session_id: uuid.UUID):
-    return db.query(models.Trade).filter(models.Trade.session_id == session_id).all()
+async def get_trades(db: AsyncSession, session_id: uuid.UUID):
+    result = await db.execute(select(models.Trade).filter(models.Trade.session_id == session_id))
+    return result.scalars().all()
 
-def get_eligible_dates(db: Session):
+async def get_eligible_dates(db: AsyncSession):
     """Get a list of eligible month and years for stock trading."""
-    eligible_dates = db.query(models.Stock).filter(models.Stock.available_from <= datetime.date.today()).all()
+    result = await db.execute(select(models.Stock).filter(models.Stock.available_from <= datetime.date.today()))
+    eligible_dates = result.scalars().all()
     return [(date.available_from.month, date.available_from.year) for date in eligible_dates]
 
-def get_eligible_dates_roulette(db: Session):
+async def get_eligible_dates_roulette(db: AsyncSession):
     """Get a random eligible month and year for roulette selections."""
     import random
     from datetime import date
     import calendar
     
     # Get all stocks with available_from dates
-    stocks = db.query(models.Stock).filter(
+    result = await db.execute(select(models.Stock).filter(
         models.Stock.available_from.isnot(None),
         models.Stock.available_from <= datetime.date.today()
-    ).all()
+    ))
+    stocks = result.scalars().all()
     
     if not stocks:
         return None
@@ -548,10 +596,11 @@ def get_eligible_dates_roulette(db: Session):
         month_end = date(year, month, last_day)
         
         # Check if stocks from all categories are available in this month
-        available_stocks = db.query(models.Stock).filter(
+        result = await db.execute(select(models.Stock).filter(
             (models.Stock.available_from <= month_start) &
             ((models.Stock.available_to >= month_end) | (models.Stock.available_to.is_(None)))
-        ).all()
+        ))
+        available_stocks = result.scalars().all()
         
         categories = set(s.category for s in available_stocks if s.category)
         sectors = set(s.sector for s in available_stocks if s.sector and s.category == "sector")
@@ -566,30 +615,31 @@ def get_eligible_dates_roulette(db: Session):
     # Return a random valid date
     return random.choice(valid_dates)
 
-def get_stock_prices(db: Session, symbol: str, start_date: datetime.date, end_date: datetime.date):
+async def get_stock_prices(db: AsyncSession, symbol: str, start_date: datetime.date, end_date: datetime.date):
     """Get stock prices for a given symbol within a date range."""
     # Convert dates to datetime objects for proper comparison with DateTime fields
     start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
     end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
     
-    return db.query(models.StockPrice).filter(
+    result = await db.execute(select(models.StockPrice).filter(
         models.StockPrice.symbol == symbol,
         models.StockPrice.date >= start_datetime,
         models.StockPrice.date <= end_datetime
-    ).all()
+    ))
+    return result.scalars().all()
 
-def get_stock_sectors(db: Session):
+async def get_stock_sectors(db: AsyncSession):
     """Get a list of unique stock sectors from the stock_sectors view."""
     try:
         # Try to query the view first
-        result = db.execute(text("SELECT sector FROM stock_sectors ORDER BY sector"))
+        result = await db.execute(text("SELECT sector FROM stock_sectors ORDER BY sector"))
         return [row[0] for row in result.fetchall()]
     except Exception:
         # Fallback to querying stocks table directly if view doesn't exist
-        result = db.execute(text("SELECT DISTINCT sector FROM stocks WHERE sector IS NOT NULL ORDER BY sector"))
+        result = await db.execute(text("SELECT DISTINCT sector FROM stocks WHERE sector IS NOT NULL ORDER BY sector"))
         return [row[0] for row in result.fetchall()]
 
-def get_latest_stock_prices(db: Session, symbols: list):
+async def get_latest_stock_prices(db: AsyncSession, symbols: list):
     """Get the latest stock prices for given symbols."""
     if not symbols:
         return []
@@ -597,24 +647,27 @@ def get_latest_stock_prices(db: Session, symbols: list):
     # Get the latest price for each symbol
     latest_prices = []
     for symbol in symbols:
-        latest_price = db.query(models.StockPrice).filter(
+        result = await db.execute(select(models.StockPrice).filter(
             models.StockPrice.symbol == symbol
-        ).order_by(models.StockPrice.date.desc()).first()
+        ).order_by(models.StockPrice.date.desc()).limit(1))
+        latest_price = result.scalar_one_or_none()
         
         if latest_price:
             latest_prices.append(latest_price)
     
     return latest_prices
 
-def calculate_score(db: Session, session_id: uuid.UUID):
+async def calculate_score(db: AsyncSession, session_id: uuid.UUID):
     """Calculate the score for a session based on trades."""
     logger.info(f"Starting score calculation for session {session_id}")
     
-    trades = db.query(models.Trade).filter(models.Trade.session_id == session_id).order_by(models.Trade.timestamp).all()
+    result = await db.execute(select(models.Trade).filter(models.Trade.session_id == session_id).order_by(models.Trade.timestamp))
+    trades = result.scalars().all()
     logger.info(f"Found {len(trades)} trades for session {session_id}")
 
     # Get session to access player_id
-    session = db.query(models.Session).filter(models.Session.session_id == session_id).first()
+    result = await db.execute(select(models.Session).filter(models.Session.session_id == session_id))
+    session = result.scalar_one_or_none()
     if not session:
         logger.error(f"Session {session_id} not found")
         raise ValueError(f"Session {session_id} not found")
@@ -632,8 +685,8 @@ def calculate_score(db: Session, session_id: uuid.UUID):
             total_score=0.0
         )
         db.add(db_score)
-        db.commit()
-        db.refresh(db_score)
+        await db.commit()
+        await db.refresh(db_score)
         logger.info("Created zero-value score record")
         return db_score
     
@@ -757,8 +810,8 @@ def calculate_score(db: Session, session_id: uuid.UUID):
         total_score=total_score
     )
     db.add(db_score)
-    db.commit()
-    db.refresh(db_score)
+    await db.commit()
+    await db.refresh(db_score)
     
     logger.info(f"Score calculation completed for session {session_id}")
     return db_score
@@ -766,14 +819,15 @@ def calculate_score(db: Session, session_id: uuid.UUID):
 
 # Unsold Shares
 
-def get_unsold_shares(db: Session, session_id: uuid.UUID):
+async def get_unsold_shares(db: AsyncSession, session_id: uuid.UUID):
     """Get all unsold shares for a session."""
-    return db.query(models.UnsoldShare).filter(models.UnsoldShare.session_id == session_id).all()
+    result = await db.execute(select(models.UnsoldShare).filter(models.UnsoldShare.session_id == session_id))
+    return result.scalars().all()
 
 
-def get_unsold_shares_summary(db: Session, session_id: uuid.UUID):
+async def get_unsold_shares_summary(db: AsyncSession, session_id: uuid.UUID):
     """Get a summary of unsold shares by symbol for a session."""
-    unsold_shares = get_unsold_shares(db, session_id)
+    unsold_shares = await get_unsold_shares(db, session_id)
     
     # Group by symbol and aggregate
     summary = {}

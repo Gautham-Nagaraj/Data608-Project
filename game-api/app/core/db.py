@@ -1,30 +1,59 @@
-from typing import Generator
+from typing import AsyncGenerator
 
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 
 from app.core.config import settings
 
 """
 Database engine and session management.
 """
-# Create SQLAlchemy engine
-engine = create_engine(
+# Create async SQLAlchemy engine
+async_engine = create_async_engine(
     str(settings.DATABASE_URL),
+    pool_pre_ping=True,
+    echo=False
+)
+
+# Async session factory
+AsyncSessionLocal = async_sessionmaker(
+    bind=async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+# Keep sync engine for migrations and admin tasks
+sync_engine = create_engine(
+    str(settings.DATABASE_URL).replace("postgresql+asyncpg://", "postgresql+psycopg://"),
     pool_pre_ping=True
 )
 
-# Session factory
+# Sync session factory (for migrations)
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=sync_engine
 )
 
 
-def get_db() -> Generator:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    Dependency that provides a database session and ensures it is closed after use.
+    Async dependency that provides a database session and ensures it is closed after use.
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+def get_db_sync():
+    """
+    Sync dependency for backwards compatibility and migrations.
     """
     db = SessionLocal()
     try:

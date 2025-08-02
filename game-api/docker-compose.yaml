@@ -22,7 +22,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+psycopg://stockroulette_user:ChangeMe123!@db:5432/stockroulette
+      DATABASE_URL: postgresql+asyncpg://stockroulette_user:ChangeMe123!@db:5432/stockroulette
     volumes:
       - .:/app
       - /app/.venv  # Exclude .venv from volume mount

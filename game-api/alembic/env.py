@@ -19,6 +19,10 @@ config = context.config
 # ✅ Dynamically inject DATABASE_URL from environment
 database_url = os.environ.get("DATABASE_URL")
 if database_url:
+    # Convert async URL to sync URL for Alembic
+    # Also ensure we use the correct psycopg driver instead of psycopg2
+    if "postgresql+asyncpg://" in database_url:
+        database_url = database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://")
     config.set_main_option("sqlalchemy.url", database_url)
 
 # Configure logging

@@ -2,102 +2,78 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud, schemas
 from app.core.db import get_db
 import json
 import ollama
+from langchain_community.llms import Ollama
+from langchain.prompts import PromptTemplate
+from langchain.output_parsers import PydanticOutputParser
+
 
 router = APIRouter()
 
 
 @router.post("/sessions/", response_model=schemas.Session)
-def start_session(session_in: schemas.SessionCreate, db: Session = Depends(get_db)):
+async def start_session(session_in: schemas.SessionCreate, db: AsyncSession = Depends(get_db)):
     # Check if player exists
-    player = crud.get_player(db, session_in.player_id)
+    player = await crud.get_player(db, session_in.player_id)
     if not player:
         raise HTTPException(status_code=400, detail="Player does not exist")
 
-    return crud.create_session(db, session_in)
+    return await crud.create_session(db, session_in)
 
 
 @router.get("/sessions/{session_id}", response_model=schemas.Session)
-def read_session(session_id: UUID, db: Session = Depends(get_db)):
-    db_session = crud.get_session(db, session_id)
+async def read_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
+    db_session = await crud.get_session(db, session_id)
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
     return db_session
 
 
 @router.patch("/sessions/{session_id}", response_model=schemas.Session)
-def modify_session(session_id: UUID, session_upd: schemas.SessionUpdate, db: Session = Depends(get_db)):
-    updated = crud.update_session(db, session_id, session_upd)
+async def modify_session(session_id: UUID, session_upd: schemas.SessionUpdate, db: AsyncSession = Depends(get_db)):
+    updated = await crud.update_session(db, session_id, session_upd)
     if not updated:
         raise HTTPException(status_code=404, detail="Session not found")
     return updated
 
 @router.post("/sessions/{session_id}/end", response_model=schemas.Score)
-def end_session(session_id: UUID, db: Session = Depends(get_db)):
+async def end_session(session_id: UUID, db: AsyncSession = Depends(get_db)):
     """End a session by marking it as ended."""
-    session = crud.get_session(db, session_id)
+    session = await crud.get_session(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
     # Update the session status to ended
     session.status = "ended"
     
-    # Set the ended timestamp
+    # Set the ended timestamp (timezone-naive for PostgreSQL)
     from datetime import datetime, timezone
-    session.ended_at = datetime.now(timezone.utc)
+    session.ended_at = datetime.now(timezone.utc).replace(tzinfo=None)
     
-    db.commit()
-    db.refresh(session)
+    await db.commit()
+    await db.refresh(session)
     
     # Calculate and store the score
-    db_score = crud.calculate_score(db, session_id)
+    db_score = await crud.calculate_score(db, session_id)
 
     return db_score
 
 
-@router.get("/sessions/{session_id}/summary", response_model=schemas.SessionSummary)
-def get_session_summary(session_id: UUID, db: Session = Depends(get_db)):
-    """Get comprehensive session summary with unsold shares and feedback."""
-    summary = crud.get_session_summary(db, session_id)
-    if not summary:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return summary
-
-
-@router.get("/sessions/{session_id}/unsold-shares", response_model=list[schemas.UnsoldShare])
-def get_unsold_shares(session_id: UUID, db: Session = Depends(get_db)):
-    """Get all unsold shares for a session."""
-    session = crud.get_session(db, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    return crud.get_unsold_shares(db, session_id)
-
-
-@router.get("/sessions/{session_id}/unsold-shares/summary")
-def get_unsold_shares_summary(session_id: UUID, db: Session = Depends(get_db)):
-    """Get aggregated summary of unsold shares by symbol."""
-    session = crud.get_session(db, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    return crud.get_unsold_shares_summary(db, session_id)
-
 @router.post("/sessions/{session_id}/advise")
-def advise_player(session_id: UUID, db: Session = Depends(get_db)):
+async def advise_player(session_id: UUID, db: AsyncSession = Depends(get_db)):
     """
     Provide buy/sell/hold advice for the current session using stock price history.
     """
-    session = crud.get_session(db, session_id)
+    session = await crud.get_session(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
     
-    selection = crud.get_selection(db, session_id)
+    selection = await crud.get_selection(db, session_id)
     if not selection:
         raise HTTPException(status_code=400, detail="No stocks selected yet.")
 
@@ -110,14 +86,16 @@ def advise_player(session_id: UUID, db: Session = Depends(get_db)):
     last_day_of_month = calendar.monthrange(selection.year, selection.month)[1]
     last_day = date(selection.year, selection.month, last_day_of_month)
     
+    N = 5
     for symbol in symbols:
-        prices = crud.get_stock_prices(db, symbol, first_day, last_day)
-        game_data[symbol] = [{"date": p.date.isoformat(), "price": p.price} for p in prices]
+        prices = await crud.get_stock_prices(db, symbol, first_day, last_day)
+        recent_prices = prices[-N:]  # Last N entries only
+        game_data[symbol] = [{"date": p.date.isoformat(), "price": p.price} for p in recent_prices]
 
     if not game_data:
         raise HTTPException(status_code=500, detail="Price history missing for selected tickers.")
 
-    trades = crud.get_trades(db, session_id)
+    trades = await crud.get_trades(db, session_id)
     
     # Convert Trade objects to dictionaries for JSON serialization
     trades_data = [
@@ -133,86 +111,59 @@ def advise_player(session_id: UUID, db: Session = Depends(get_db)):
         for trade in trades
     ]
 
-    # Compose LLM prompt
-    prompt = f"""
-You are a financial trading assistant in a stock simulation game, and your cutoff date is one day before of {session.started_at}.
+    llm = Ollama(
+        model="qwen2.5:7b",
+        base_url="http://host.docker.internal:11434",
+        temperature=0.7,
+        top_p=0.9,
+        num_ctx=2048,
+        num_predict=256
+    )
+    
+    # Create parser based on the schema
+    parser = PydanticOutputParser(pydantic_object=schemas.TradingAdviceResponse)
+    
+    prompt_template = PromptTemplate(
+        input_variables=["symbols", "cutoff_date", "stock_data", "trades_data"],
+        template="""You are a financial trading assistant in a stock simulation game, and your cutoff date is one day before of {cutoff_date}.
 
-Your task: For each of these 3 stocks ({', '.join(symbols)}), choose one action (BUY, SELL, HOLD) and give a short reason.
+Your task: For each of these 3 stocks ({symbols}), choose one action (BUY, SELL, HOLD) and give a short reason.
 Plan ahead for the next trading day, considering the current market conditions and the player's trades history.
 Base your advice on the player's trade history, recent price movements, and day trading strategy, with the goal to maximize profit. Do not include disclaimers.
 
-IMPORTANT: You must respond with ONLY valid JSON in this exact format, no additional text:
-[
-  {{
-    "symbol": "TICKER",
-    "action": "BUY",
-    "reason": "Short explanation here"
-  }},
-  {{
-    "symbol": "TICKER",
-    "action": "SELL", 
-    "reason": "Short explanation here"
-  }},
-  {{
-    "symbol": "TICKER",
-    "action": "HOLD",
-    "reason": "Short explanation here"
-  }}
-]
+{format_instructions}
 
 Stock data for analysis:
-{json.dumps(game_data, indent=2)}
+{stock_data}
 
 Player's trade history:
-{json.dumps(trades_data, indent=2)}
-"""
-
-
-    # Call local Ollama model
-    client = ollama.Client(host="http://host.docker.internal:11434")
-    response = client.chat(
-        model="qwen2.5:7b",
-        messages=[
-            {"role": "system", "content": "You are a helpful trading assistant in a simulated stock trading game. Always respond with valid JSON only, no additional text or explanations."},
-            {"role": "user", "content": prompt}
-        ],
-        options={
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "stop": ["</s>"]
-        }
+{trades_data}""",
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
-
-    try:
-        # Parse the JSON response from the LLM
-        advice_content = response['message']['content']
-        
-        # Clean the content in case there are markdown code blocks
-        if "```json" in advice_content:
-            advice_content = advice_content.split("```json")[1].split("```")[0].strip()
-        elif "```" in advice_content:
-            advice_content = advice_content.split("```")[1].split("```")[0].strip()
-        
-        advice_data = json.loads(advice_content)
-        
-        # Validate that we have the expected format
-        if not isinstance(advice_data, list):
-            raise ValueError("Advice should be a list")
-        
-        for item in advice_data:
-            if not all(key in item for key in ["symbol", "action", "reason"]):
-                raise ValueError("Each advice item should have symbol, action, and reason")
-        
-        return {"advice": advice_data}
     
-    except (json.JSONDecodeError, ValueError, KeyError) as e:
-        # If parsing fails, return a fallback response
+    # Create the chain
+    chain = prompt_template | llm | parser
+    
+    try:
+        # Execute the chain
+        result = chain.invoke({
+            "symbols": ', '.join(symbols),
+            "cutoff_date": session.started_at,
+            "stock_data": json.dumps(game_data, separators=(',', ':')),
+            "trades_data": json.dumps(trades_data, separators=(',', ':'))
+        })
+        
+        # Return the Pydantic model directly (FastAPI will handle serialization)
+        return result
+    
+    except Exception as e:
+        # If anything fails, return a fallback response
         fallback_advice = []
         for symbol in symbols:
-            fallback_advice.append({
-                "symbol": symbol,
-                "action": "HOLD",
-                "reason": "Unable to generate AI advice at this time. Consider holding your position."
-            })
+            fallback_advice.append(schemas.TradingAdviceItem(
+                symbol=symbol,
+                action="HOLD",
+                reason="Unable to generate AI advice at this time. Consider holding your position."
+            ))
         
-        return {"advice": fallback_advice}
+        return schemas.TradingAdviceResponse(advice=fallback_advice)

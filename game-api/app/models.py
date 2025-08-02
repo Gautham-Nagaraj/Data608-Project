@@ -3,14 +3,16 @@ import uuid
 
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.orm import DeclarativeBase
 
-Base = declarative_base()
+class Base(AsyncAttrs, DeclarativeBase):
+    pass
 
 
 def utc_now():
-    """Helper function to get current UTC datetime - replacement for deprecated datetime.utcnow()"""
-    return datetime.now(timezone.utc)
+    """Helper function to get current UTC datetime as naive datetime for PostgreSQL"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Player(Base):

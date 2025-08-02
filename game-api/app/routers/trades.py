@@ -2,7 +2,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud, schemas
 from app.core.db import get_db
@@ -11,10 +11,10 @@ router = APIRouter()
 
 
 @router.post("/trades/", response_model=schemas.Trade)
-def post_trade(trade_in: schemas.TradeCreate, db: Session = Depends(get_db)):
-    return crud.record_trade(db, trade_in)
+async def post_trade(trade_in: schemas.TradeCreate, db: AsyncSession = Depends(get_db)):
+    return await crud.record_trade(db, trade_in)
 
 
 @router.get("/trades/session/{session_id}", response_model=List[schemas.Trade])
-def list_trades(session_id: UUID, db: Session = Depends(get_db)):
-    return crud.get_trades(db, session_id)
+async def list_trades(session_id: UUID, db: AsyncSession = Depends(get_db)):
+    return await crud.get_trades(db, session_id)
