@@ -22,9 +22,10 @@ logger.add(
 app = FastAPI(debug=settings.DEBUG)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=["*"],  # Allow all origins
+    # allow_origins=["http://192.168.100.143:5173", "http://localhost:5173"],  # Vite dev server and IP access
     # allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=False,  # Must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )

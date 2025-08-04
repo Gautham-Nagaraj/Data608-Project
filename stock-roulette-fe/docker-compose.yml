@@ -1,5 +1,4 @@
 # Docker Compose for Stock Roulette Frontend
-version: '3.8'
 
 services:
   frontend:
@@ -11,19 +10,24 @@ services:
       - '5173:5173'
     environment:
       - NODE_ENV=development
-      - VITE_HOST=0.0.0.0
       - VITE_PORT=5173
+      # Use actual host IP to mimic production - replace with your host IP
+      - VITE_API_URL=http://192.168.100.143:8000
     volumes:
       - ./src:/app/src
       - ./public:/app/public
       - /app/node_modules
     restart: unless-stopped
+    network_mode: 'bridge'
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:5173']
+      test: ['CMD', 'curl', '-f', 'http://192.168.100.143:5173']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Remove all networking configuration and backend services
+  # This setup assumes backend is running directly on host at port 8000
 
   # nginx:
   #   image: nginx:alpine

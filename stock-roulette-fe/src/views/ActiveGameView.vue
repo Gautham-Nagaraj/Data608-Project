@@ -402,7 +402,8 @@ function initializeGameData() {
 }
 
 function connectWebSocket() {
-  const wsUrl = `ws://localhost:8000/ws/prices/${sessionId.value}`
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const wsUrl = `${apiUrl.replace('http', 'ws')}/ws/prices/${sessionId.value}`
   console.log('🔌 Attempting WebSocket connection to:', wsUrl)
   console.log(
     '📊 Available stocks for price updates:',
