@@ -23,6 +23,7 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://stockroulette_user:ChangeMe123!@db:5432/stockroulette
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
     volumes:
       - .:/app
       - /app/.venv  # Exclude .venv from volume mount

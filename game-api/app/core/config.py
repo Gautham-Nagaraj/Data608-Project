@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     ALLOWED_ORIGINS: List[str] = ["*"]
     SECRET_KEY: str
+    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
 
     model_config = SettingsConfigDict(
         env_file=".env",

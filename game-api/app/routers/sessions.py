@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import crud, schemas
 from app.core.db import get_db
+from app.core.config import settings
 import json
 import ollama
 from langchain_community.llms import Ollama
@@ -113,7 +114,7 @@ async def advise_player(session_id: UUID, db: AsyncSession = Depends(get_db)):
 
     llm = Ollama(
         model="qwen2.5:7b",
-        base_url="http://host.docker.internal:11434",
+        base_url=settings.OLLAMA_BASE_URL,
         temperature=0.7,
         top_p=0.9,
         num_ctx=2048,
