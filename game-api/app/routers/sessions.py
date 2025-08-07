@@ -9,7 +9,7 @@ from app.core.db import get_db
 from app.core.config import settings
 import json
 import ollama
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 
@@ -112,7 +112,7 @@ async def advise_player(session_id: UUID, db: AsyncSession = Depends(get_db)):
         for trade in trades
     ]
 
-    llm = Ollama(
+    llm = OllamaLLM(
         model="qwen2.5:7b",
         base_url=settings.OLLAMA_BASE_URL,
         temperature=0.7,
