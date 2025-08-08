@@ -180,7 +180,7 @@
         </div>
         <div class="debug-item">
           <strong>Last Response:</strong>
-          <pre v-if="lastAdviceResponse">{{ JSON.stringify(lastAdviceResponse, null, 2) }}</pre>
+          <pre v-if="lastAdviceResponse">{{ JSON.stringify(getOrderedAdviceResponse(), null, 2) }}</pre>
           <span v-else>No response yet</span>
         </div>
       </div>
@@ -1108,8 +1108,19 @@ async function getAIAdvice() {
         )
 
         if (validRecommendations.length > 0) {
-          tradingAdvice.value = validRecommendations
-          console.log('✅ Successfully set trading advice:', validRecommendations)
+          // Sort recommendations to match UI order: Popular (left), Volatile (middle), Sector (right)
+          const sortedRecommendations = validRecommendations.sort((a, b) => {
+            const stockA = stocks.value.find(s => s.ticker === a.symbol)
+            const stockB = stocks.value.find(s => s.ticker === b.symbol)
+            
+            const typeOrderA = getStockTypeOrder(stockA?.type || '')
+            const typeOrderB = getStockTypeOrder(stockB?.type || '')
+            
+            return typeOrderA - typeOrderB
+          })
+          
+          tradingAdvice.value = sortedRecommendations
+          console.log('✅ Successfully set trading advice (sorted by UI order):', sortedRecommendations)
         } else {
           throw new Error('No valid recommendations found in response')
         }
@@ -1185,6 +1196,42 @@ function getAdviceActionClass(action: string): string {
     default:
       return 'advice-neutral'
   }
+}
+
+function getStockTypeOrder(type: string): number {
+  // Define order to match UI layout: Popular (left), Volatile (middle), Sector (right)
+  switch (type) {
+    case 'Popular':
+      return 0
+    case 'Volatile':
+      return 1
+    case 'Sector':
+      return 2
+    default:
+      return 999 // Unknown types go to the end
+  }
+}
+
+function getOrderedAdviceResponse(): object | null {
+  if (!lastAdviceResponse.value) return null
+  
+  // Create a copy of the response to avoid mutating the original
+  const orderedResponse = { ...lastAdviceResponse.value } as any
+  
+  // If the response has an advice field that's an array, sort it
+  if (orderedResponse.advice && Array.isArray(orderedResponse.advice)) {
+    orderedResponse.advice = [...orderedResponse.advice].sort((a: any, b: any) => {
+      const stockA = stocks.value.find(s => s.ticker === a.symbol)
+      const stockB = stocks.value.find(s => s.ticker === b.symbol)
+      
+      const typeOrderA = getStockTypeOrder(stockA?.type || '')
+      const typeOrderB = getStockTypeOrder(stockB?.type || '')
+      
+      return typeOrderA - typeOrderB
+    })
+  }
+  
+  return orderedResponse
 }
 
 async function endGame() {
