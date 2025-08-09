@@ -30,11 +30,11 @@ sudo apt-get install python3-pip python3-venv -y
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 # 5 clone the repository
-git clone https://github.com/Gautham-Nagaraj/Data608-Project.git
-cd Data608-Project/game-api
+#git clone https://github.com/Gautham-Nagaraj/Data608-Project.git
+#cd Data608-Project/game-api
 # 6 install dependencies
 uv sync
 # 7. run migrations
-uv run alembic upgrade head
+#uv run alembic upgrade head
 # 8. run app
-sudo docker compose up -d --build
+#sudo docker compose up -d --build

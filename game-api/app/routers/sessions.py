@@ -9,10 +9,14 @@ from app.core.db import get_db
 from app.core.config import settings
 import json
 import ollama
-from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
-from langchain.output_parsers import PydanticOutputParser
+import logging
+import traceback
+from langchain_ollama import ChatOllama
+from pydantic import BaseModel
 
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -112,59 +116,73 @@ async def advise_player(session_id: UUID, db: AsyncSession = Depends(get_db)):
         for trade in trades
     ]
 
-    llm = OllamaLLM(
-        model="qwen2.5:7b",
+    llm = ChatOllama(
+        model="qwen3:latest",
         base_url=settings.OLLAMA_BASE_URL,
-        temperature=0.7,
+        temperature=0.2,
         top_p=0.9,
         num_ctx=2048,
-        num_predict=256
+        num_predict=256,
+        format="json"
     )
     
     # Create parser based on the schema
-    parser = PydanticOutputParser(pydantic_object=schemas.TradingAdviceResponse)
+    structured_llm  = llm.with_structured_output(schemas.TradingAdviceResponse)
     
     prompt_template = PromptTemplate(
         input_variables=["symbols", "cutoff_date", "stock_data", "trades_data"],
         template="""You are a financial trading assistant in a stock simulation game, and your cutoff date is one day before of {cutoff_date}.
-
 Your task: For each of these 3 stocks ({symbols}), choose one action (BUY, SELL, HOLD) and give a short reason.
 Plan ahead for the next trading day, considering the current market conditions and the player's trades history.
 Base your advice on the player's trade history, recent price movements, and day trading strategy, with the goal to maximize profit. Do not include disclaimers.
-
-{format_instructions}
-
 Stock data for analysis:
 {stock_data}
-
 Player's trade history:
-{trades_data}""",
-        partial_variables={"format_instructions": parser.get_format_instructions()}
+{trades_data}"""
     )
     
     # Create the chain
-    chain = prompt_template | llm | parser
-    
+    chain = prompt_template | structured_llm 
+
     try:
-        # Execute the chain
-        result = chain.invoke({
+        # Prepare prompt input
+        prompt_input = {
             "symbols": ', '.join(symbols),
-            "cutoff_date": session.started_at,
+            "cutoff_date": session.started_at.isoformat(),
             "stock_data": json.dumps(game_data, separators=(',', ':')),
-            "trades_data": json.dumps(trades_data, separators=(',', ':'))
-        })
-        
+            "trades_data": json.dumps(trades_data, separators=(',', ':')),
+        }
+
+        logger.info("Generated prompt input for LLM:\n%s", prompt_input)
+
+        # Execute the chain
+        result = await chain.ainvoke(prompt_input, timeout=10)
+
+        logger.info("LLM output parsed successfully:\n%s", result)
+
         # Return the Pydantic model directly (FastAPI will handle serialization)
         return result
     
     except Exception as e:
-        # If anything fails, return a fallback response
-        fallback_advice = []
-        for symbol in symbols:
-            fallback_advice.append(schemas.TradingAdviceItem(
+        logger.error("LLM generation or parsing failed: %s", str(e))
+        logger.debug("Traceback:\n%s", traceback.format_exc())
+
+        # Try to get raw LLM response (bypassing parser) for inspection
+        try:
+            prompt = await prompt_template.ainvoke(prompt_input)
+            raw_output = await llm.ainvoke(prompt)
+            logger.warning("Raw LLM response (unparsed):\n%s", raw_output)
+        except Exception as raw_err:
+            logger.error("Even raw LLM call failed: %s", raw_err)
+
+        # Fallback response
+        fallback_advice = [
+            schemas.TradingAdviceItem(
                 symbol=symbol,
                 action="HOLD",
                 reason="Unable to generate AI advice at this time. Consider holding your position."
-            ))
-        
+            )
+            for symbol in symbols
+        ]
+
         return schemas.TradingAdviceResponse(advice=fallback_advice)
