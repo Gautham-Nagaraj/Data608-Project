@@ -119,7 +119,7 @@ async def advise_player(session_id: UUID, db: AsyncSession = Depends(get_db)):
     llm = ChatOllama(
         model="qwen3:latest",
         base_url=settings.OLLAMA_BASE_URL,
-        temperature=0.2,
+        temperature=0,
         top_p=0.9,
         num_ctx=2048,
         num_predict=256,
@@ -157,6 +157,27 @@ Player's trade history:
 
         # Execute the chain
         result = await chain.ainvoke(prompt_input, timeout=10)
+
+        # Filter advice to only include selected symbols and ensure all are present
+        selected_set = set(symbols)
+        filtered_advice = []
+        seen = set()
+        for item in result.advice:
+            if item.symbol in selected_set and item.symbol not in seen:
+                filtered_advice.append(item)
+                seen.add(item.symbol)
+
+        # Add missing symbols with HOLD advice
+        for symbol in symbols:
+            if symbol not in seen:
+                filtered_advice.append(
+                    schemas.TradingAdviceItem(
+                        symbol=symbol,
+                        action="HOLD",
+                        reason="No specific advice generated for this symbol. Consider holding."
+                    )
+                )
+        result.advice = filtered_advice
 
         logger.info("LLM output parsed successfully:\n%s", result)
 

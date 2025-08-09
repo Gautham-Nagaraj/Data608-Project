@@ -117,60 +117,83 @@ async def get_admin_user(db: AsyncSession, login: str):
 async def get_sessions_with_filters(db: AsyncSession, player_id: int = None, status: str = None, 
                             start_date = None, end_date = None, limit: int = 100, offset: int = 0):
     """Get sessions with optional filters for admin dashboard"""
+    logger.info("Fetching sessions with filters: player_id=%s, status=%s, start_date=%s, end_date=%s, limit=%s, offset=%s", player_id, status, start_date, end_date, limit, offset)
     query = select(models.Session)
-    
+
     if player_id:
+        logger.debug("Applying player_id filter: %s", player_id)
         query = query.filter(models.Session.player_id == player_id)
-    
+
     if status:
+        logger.debug("Applying status filter: %s", status)
         query = query.filter(models.Session.status == status)
-    
+
     if start_date:
+        logger.debug("Applying start_date filter: %s", start_date)
         query = query.filter(models.Session.started_at >= start_date)
-    
+
     if end_date:
-        # Add one day to include sessions started on end_date
         from datetime import timedelta
         end_datetime = datetime.combine(end_date, datetime.min.time()) + timedelta(days=1)
+        logger.debug("Applying end_date filter: %s (exclusive)", end_datetime)
         query = query.filter(models.Session.started_at < end_datetime)
-    
-    # Order by most recent first
+
     query = query.order_by(models.Session.started_at.desc())
-    
+
     if offset:
+        logger.debug("Applying offset: %s", offset)
         query = query.offset(offset)
-    
+
     if limit:
+        logger.debug("Applying limit: %s", limit)
         query = query.limit(limit)
-    
-    result = await db.execute(query)
-    sessions = result.scalars().all()
-    
-    # Enrich with player nicknames and score data
+
+    try:
+        result = await db.execute(query)
+        sessions = result.scalars().all()
+        logger.info("Found %d sessions", len(sessions))
+    except Exception as e:
+        logger.error("Error executing session query: %s", e, exc_info=True)
+        raise
+
     result_list = []
     for session in sessions:
-        # Get player
-        player_result = await db.execute(select(models.Player).filter(models.Player.id == session.player_id))
-        player = player_result.scalar_one_or_none()
-        
-        # Get score
-        score_result = await db.execute(select(models.Score).filter(models.Score.session_id == session.session_id))
-        score = score_result.scalar_one_or_none()
-        
-        session_data = {
-            "session_id": str(session.session_id),
-            "player_id": session.player_id,
-            "player_nickname": player.nickname if player else "Unknown",
-            "started_at": session.started_at,
-            "ended_at": session.ended_at,
-            "status": session.status,
-            "balance": session.balance,
-            "total_score": score.total_score if score else 0,
-            "total_profit": float(score.total_profit) if score else 0.0,
-            "total_trades": score.total_trades if score else 0
-        }
-        result_list.append(session_data)
-    
+        try:
+            logger.debug("Processing session_id=%s", session.session_id)
+            player_result = await db.execute(select(models.Player).filter(models.Player.id == session.player_id))
+            player = player_result.scalar_one_or_none()
+            if not player:
+                logger.warning("Player not found for player_id=%s in session_id=%s", session.player_id, session.session_id)
+
+            # Fetch only the latest score for this session (by id descending)
+            score_result = await db.execute(
+                select(models.Score)
+                .filter(models.Score.session_id == session.session_id)
+                .order_by(models.Score.id.desc())
+                .limit(1)
+            )
+            score = score_result.scalar_one_or_none()
+            if not score:
+                logger.info("No score found for session_id=%s", session.session_id)
+
+            session_data = {
+                "session_id": str(session.session_id),
+                "player_id": session.player_id,
+                "player_nickname": player.nickname if player else "Unknown",
+                "started_at": session.started_at,
+                "ended_at": session.ended_at,
+                "status": session.status,
+                "balance": session.balance,
+                "total_score": score.total_score if score else 0,
+                "total_profit": float(score.total_profit) if score else 0.0,
+                "total_trades": score.total_trades if score else 0
+            }
+            result_list.append(session_data)
+        except Exception as e:
+            logger.error("Error processing session_id=%s: %s", getattr(session, 'session_id', 'unknown'), e, exc_info=True)
+            continue
+
+    logger.info("Returning %d session results", len(result_list))
     return result_list
 
 
