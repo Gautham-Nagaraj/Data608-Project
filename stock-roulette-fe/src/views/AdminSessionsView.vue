@@ -202,8 +202,7 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString()
 }
 
-// Chat Logs feature removed
-}
+
 
 const resetSession = (sessionId: string) => {
   confirmAction.value = {
