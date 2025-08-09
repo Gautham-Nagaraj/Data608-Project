@@ -45,10 +45,7 @@ const routes = [
         path: 'leaderboard',
         name: 'AdminLeaderboard',
         component: AdminLeaderboardView,
-      },
-      {
-
-      },
+      }
     ],
   },
 ]
