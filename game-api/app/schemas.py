@@ -1,8 +1,9 @@
 from datetime import datetime, date
 from typing import List, Optional
 from uuid import UUID
+from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator, conlist, ConfigDict, field_validator
 
 
 class ORMModel(BaseModel):
@@ -237,17 +238,25 @@ class PlayerStatistics(BaseModel):
     class Config:
         from_attributes = True
 
+class Action(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+    HOLD = "HOLD"
+
 class TradingAdviceItem(BaseModel):
-    symbol: str = Field(..., description="Stock symbol", example="AAPL")
-    action: str = Field(..., description="Trading action: BUY, SELL, or HOLD", example="BUY")
-    reason: str = Field(..., description="Short explanation for the recommendation", example="Strong upward trend expected")
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+    symbol: str = Field(..., description="Stock symbol", example="AAPL", min_length=1, max_length=10)
+    action: Action = Field(..., description="Trading action")
+    reason: str = Field(..., description="Short explanation", min_length=3, max_length=240)
 
-    class Config:
-        from_attributes = True
-
+    @field_validator("symbol")
+    def normalize_symbol(cls, v: str) -> str:
+        v = v.strip().upper()
+        # Very permissive ticker pattern; adjust as needed
+        if not __import__("re").match(r"^[A-Z0-9.\-]{1,10}$", v):
+            raise ValueError("Invalid ticker format")
+        return v
 
 class TradingAdviceResponse(BaseModel):
-    advice: List[TradingAdviceItem] = Field(..., description="List of trading recommendations")
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+    advice: conlist(TradingAdviceItem, min_length=3, max_length=3) = Field(..., description="List of trading recommendations")
