@@ -7,7 +7,7 @@
         <h3>🏆 Final Score</h3>
         <div class="total-score">
           {{
-            typeof gameResult.total_score === 'number' ? gameResult.total_score.toFixed(2) : '0.00'
+            typeof gameResult.total_score === 'number' ? gameResult.total_score : '0'
           }}
         </div>
       </div>
