@@ -20,6 +20,8 @@ sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin 
 # 2. setup docker-compose
 sudo apt-get update
 sudo apt  install docker-compose -y
+# 3 install psql client
+sudo apt-get install postgresql-client -y
 # 3. run database
 sudo docker-compose up -d db
 # 3.1 wait for db to be ready
@@ -29,12 +31,9 @@ sudo apt-get install python3-pip python3-venv -y
 # 4.1 install uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
-# 5 clone the repository
-#git clone https://github.com/Gautham-Nagaraj/Data608-Project.git
-#cd Data608-Project/game-api
-# 6 install dependencies
+# 5 install dependencies
 uv sync
-# 7. run migrations
-#uv run alembic upgrade head
-# 8. run app
-#sudo docker compose up -d --build
+# 6. run migrations
+uv run alembic upgrade head
+# 7. install admin credentials
+PGPASSWORD="ChangeMe123!" psql -h localhost -U stockroulette_user -d postgres -f db/init.sql

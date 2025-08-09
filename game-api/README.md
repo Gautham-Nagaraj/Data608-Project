@@ -7,18 +7,21 @@ ssh connection:
 8000
 
 ## Setup
+0. connect to  ubuntu ec2
+```
+ssh -R 0.0.0.0:11435:visaggpu02.cs.ucalgary.ca:11434 -i "<pem_file>.pem" ubuntu@<public_ip>
+```
 
 1. **Clone repository**:
     ```bash
-   git clone https://github.com/yourorg/stock-roulette-api.git
-   cd stock-roulette-api
+   git clone https://github.com/Gautham-Nagaraj/Data608-Project.git
+   cd Data608-Project/game-api
     ````
 
-2. **Install dependencies**:
-
-   ```bash
-   uv install
-   ```
+2. Setup ubuntu ec2
+```bash
+./setup-ubuntu-vm.sh
+```
 
 3. **Configure environment**:
 
@@ -48,47 +51,6 @@ ssh connection:
      uv run start
      ```
 
-## Endpoints
-
-* **Health check**: `GET /health`
-* **Admin**:
-
-  * `GET /admin/login`
-  * `POST /admin/login`
-  * `GET /admin/dashboard`
-* **Sessions**:
-
-  * `POST /sessions`
-  * `GET /sessions/{session_id}`
-  * `PATCH /sessions/{session_id}`
-* **Selections**:
-
-  * `POST /selections/{session_id}`
-* **Trades**:
-
-  * `POST /trades`
-  * `GET /trades/session/{session_id}`
-
 ## Database
 
 * Managed via Alembic migrations in `alembic/`.
-
-## Seeding Admin User
-
-To create an initial admin user, run a Python snippet:
-
-```python
-from app.core.db import SessionLocal
-from app.core.auth import hash_password
-from app import models
-
-db = SessionLocal()
-admin = models.AdminUser(login='admin', password_hash=hash_password('yourpassword'))
-db.add(admin)
-db.commit()
-db.close()
-```
-
-
-# to run
-uv run -- uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
