@@ -17,9 +17,7 @@
       <router-link to="/admin/leaderboard" class="nav-item" active-class="active">
         Leaderboard
       </router-link>
-      <router-link to="/admin/chat-logs" class="nav-item" active-class="active">
-        Chat Logs
-      </router-link>
+
     </nav>
 
     <main class="admin-content">
@@ -34,7 +32,7 @@
 
         <div class="export-options">
           <button @click="handleExport('sessions')" class="export-option">Sessions Data</button>
-          <button @click="handleExport('logs')" class="export-option">Chat Logs</button>
+
           <button @click="handleExport('all')" class="export-option">All Data</button>
         </div>
 
@@ -87,7 +85,7 @@ const exportData = () => {
   showExportModal.value = true
 }
 
-const handleExport = async (type: 'sessions' | 'logs' | 'all') => {
+const handleExport = async (type: 'sessions' | 'all') => {
   await adminStore.exportData(type)
   showExportModal.value = false
 }

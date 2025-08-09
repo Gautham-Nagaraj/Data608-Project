@@ -7,7 +7,7 @@ import AdminLoginView from '@/views/AdminLoginView.vue'
 import AdminDashboardView from '@/views/AdminDashboardView.vue'
 import AdminSessionsView from '@/views/AdminSessionsView.vue'
 import AdminLeaderboardView from '@/views/AdminLeaderboardView.vue'
-import AdminChatLogsView from '@/views/AdminChatLogsView.vue'
+
 import { useAdminStore } from '@/stores/adminStore'
 
 const routes = [
@@ -47,9 +47,7 @@ const routes = [
         component: AdminLeaderboardView,
       },
       {
-        path: 'chat-logs',
-        name: 'AdminChatLogs',
-        component: AdminChatLogsView,
+
       },
     ],
   },

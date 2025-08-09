@@ -22,15 +22,7 @@ export interface Session {
   total_trades: number
 }
 
-export interface ChatLog {
-  id: string
-  session_id: string
-  message: string
-  sender: 'player' | 'agent'
-  timestamp: string
-  ai_suggestion?: string
-  decision_outcome?: string
-}
+
 
 export interface LeaderboardEntry {
   player_id: number
@@ -47,7 +39,7 @@ export const useAdminStore = defineStore('admin', {
   state: () => ({
     isAuthenticated: false,
     sessions: [] as Session[],
-    chatLogs: [] as ChatLog[],
+
     leaderboard: [] as LeaderboardEntry[],
     loading: false,
     error: null as string | null,
@@ -159,22 +151,7 @@ export const useAdminStore = defineStore('admin', {
       }
     },
 
-    async fetchChatLogs(sessionId?: string) {
-      try {
-        this.loading = true
-        this.error = null
 
-        const url = sessionId ? `/api/admin/chat-logs/${sessionId}` : '/api/admin/chat-logs'
-        const response = await api.get(url)
-        this.chatLogs = Array.isArray(response.data) ? response.data : []
-      } catch (error: unknown) {
-        const axiosError = error as ApiError
-        this.error = axiosError.response?.data?.message || 'Failed to fetch chat logs'
-        this.chatLogs = [] // Ensure chatLogs is always an array
-      } finally {
-        this.loading = false
-      }
-    },
 
     async fetchLeaderboard() {
       try {
@@ -241,7 +218,7 @@ export const useAdminStore = defineStore('admin', {
       }
     },
 
-    async exportData(type: 'sessions' | 'logs' | 'all') {
+  async exportData(type: 'sessions' | 'all') {
       try {
         this.loading = true
         this.error = null

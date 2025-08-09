@@ -92,9 +92,9 @@
             <td>
               <div class="actions">
                 <button
-                  @click="viewChatLogs(session.session_id)"
+
                   class="action-btn view-btn"
-                  title="View Chat Logs"
+
                 >
                   💬
                 </button>
@@ -202,8 +202,7 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString()
 }
 
-const viewChatLogs = (sessionId: string) => {
-  router.push(`/admin/chat-logs?session=${sessionId}`)
+// Chat Logs feature removed
 }
 
 const resetSession = (sessionId: string) => {
