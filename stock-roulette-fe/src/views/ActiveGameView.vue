@@ -1,8 +1,4 @@
 <template>
-  <div class="active-game-container">
-    <h2>🎮 Stock Roulette - Live Game</h2>
-
-    <template>
               <div v-if="playerName" class="player-info">
                 <span>👤 {{ playerName }}</span>
               </div>
@@ -227,15 +223,18 @@ const currentDate = ref('')
 const playerName = ref('')
 const playerCash = ref(500) // Starting cash
 
-// TypeScript types
-type StockOwned = Record<string, number>
-type Stock = {
-  ticker: string
-  type: string
-  companyName?: string
-  sector?: string
-}
-type PriceHistory = Record<string, number[]>
+// --- TypeScript types moved to separate block to avoid Vue parser errors ---
+<script lang="ts">
+export type StockOwned = Record<string, number>;
+export type Stock = {
+  ticker: string;
+  type: string;
+  companyName?: string;
+  sector?: string;
+};
+export type PriceHistory = Record<string, number[]>;
+</script>
+<script setup lang="ts">
 
 const stockOwned = ref({} as StockOwned); // Track owned quantities
 const stocks = ref([] as Stock[]);
