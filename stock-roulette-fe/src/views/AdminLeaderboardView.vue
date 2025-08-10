@@ -1,7 +1,7 @@
 <template>
   <div class="leaderboard-view">
     <div class="page-header">
-      <h2>Leaderboard</h2>
+      <h2>Leaderboard - Top 10 Players</h2>
       <div class="header-actions">
         <div class="auto-refresh-info">
           <span class="refresh-counter"> Next refresh in: {{ countdown }}s </span>
@@ -51,7 +51,7 @@
 
     <!-- Leaderboard Table -->
     <div class="table-container">
-      <div v-if="sortedLeaderboard.length === 0" class="no-data">
+      <div v-if="top10Leaderboard.length === 0" class="no-data">
         <p>No leaderboard data available</p>
       </div>
 
@@ -67,21 +67,21 @@
         </thead>
         <tbody>
           <tr
-            v-for="(player, index) in sortedLeaderboard"
+            v-for="player in top10Leaderboard"
             :key="player.nickname"
-            :class="{ 'top-player': index < 3 }"
+            :class="{ 'top-player': player.rank <= 3 }"
           >
             <td class="rank-col">
-              <div class="rank-badge" :class="getRankClass(index)">
-                {{ index + 1 }}
+              <div class="rank-badge" :class="getRankClass(player.rank - 1)">
+                {{ player.rank }}
               </div>
             </td>
             <td class="player-name">
               <div class="player-info">
                 <span class="name">{{ player.nickname }}</span>
-                <div class="medals" v-if="index < 3">
-                  <span class="medal" :class="getMedalClass(index)">
-                    {{ getMedalEmoji(index) }}
+                <div class="medals" v-if="player.rank <= 3">
+                  <span class="medal" :class="getMedalClass(player.rank - 1)">
+                    {{ getMedalEmoji(player.rank - 1) }}
                   </span>
                 </div>
               </div>
@@ -100,44 +100,59 @@
           </tr>
         </tbody>
       </table>
+
+      <div class="table-footer" v-if="leaderboard.length > 10">
+        <p class="total-players-note">
+          Showing top 10 of {{ leaderboard.length.toLocaleString() }} total players
+        </p>
+      </div>
     </div>
 
     <!-- Performance Chart -->
     <div class="chart-section">
       <h3>Score Distribution</h3>
-      <div class="chart-container">
-        <div class="score-chart">
-          <div
-            v-for="(player, index) in sortedLeaderboard.slice(0, 10)"
-            :key="player.nickname"
-            class="score-bar"
-          >
-            <div class="bar-container">
-              <div
-                class="bar"
-                :style="{ width: getBarWidth(player.total_score) + '%' }"
-                :class="getBarClass(index)"
-              ></div>
-            </div>
-            <div class="bar-label">
-              <span class="player-name">{{ player.nickname }}</span>
-              <span class="score">{{ player.total_score.toLocaleString() }}</span>
-            </div>
+      <div class="histogram-controls">
+        <div class="bins-control">
+          <label for="bins-slider">Number of Bins: {{ histogramBins }}</label>
+          <input
+            id="bins-slider"
+            v-model="histogramBins"
+            type="range"
+            :min="5"
+            :max="50"
+            step="1"
+            class="bins-slider"
+            @input="updateHistogram"
+          />
+          <div class="bins-range">
+            <span>5</span>
+            <span>50</span>
           </div>
         </div>
+        <button @click="resetBinsToOptimal" class="reset-bins-btn">
+          Reset to Optimal ({{ optimalBins }})
+        </button>
+      </div>
+      <div class="chart-container">
+        <div id="score-histogram" class="plotly-chart"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, onUnmounted } from 'vue'
+import { ref, onMounted, computed, onUnmounted, nextTick, watch } from 'vue'
 import { useAdminStore } from '@/stores/adminStore'
+import Plotly from 'plotly.js-dist-min'
 
 const adminStore = useAdminStore()
 
 const sortBy = ref<'total_score' | 'total_profit'>('total_score')
 const sortOrder = ref<'asc' | 'desc'>('desc')
+
+// Histogram controls
+const histogramBins = ref(20)
+const defaultBins = 20
 
 // Auto-refresh functionality
 const isAutoRefresh = ref(true)
@@ -148,19 +163,41 @@ let countdownInterval: ReturnType<typeof setInterval> | null = null
 const loading = computed(() => adminStore.loading)
 const leaderboard = computed(() => adminStore.leaderboard)
 
-const sortedLeaderboard = computed(() => {
-  const sorted = [...leaderboard.value].sort((a, b) => {
-    const aValue = a[sortBy.value]
-    const bValue = b[sortBy.value]
+// Calculate optimal bins based on data
+const optimalBins = computed(() => {
+  if (leaderboard.value.length === 0) return defaultBins
+  return Math.min(Math.ceil(Math.sqrt(leaderboard.value.length)), 20)
+})
 
-    if (sortOrder.value === 'desc') {
-      return bValue - aValue
-    } else {
-      return aValue - bValue
-    }
+const sortedLeaderboard = computed(() => {
+  // If we have rank data from backend, sort by rank first to maintain proper order
+  const sorted = [...leaderboard.value].sort((a, b) => {
+    // Sort by rank first (ascending order for rank)
+    return a.rank - b.rank
   })
 
+  // If user wants to sort by other criteria, apply that sorting
+  if (sortBy.value !== 'total_score' || sortOrder.value !== 'desc') {
+    const sortedByUser = [...sorted].sort((a, b) => {
+      const aValue = a[sortBy.value]
+      const bValue = b[sortBy.value]
+
+      if (sortOrder.value === 'desc') {
+        return bValue - aValue
+      } else {
+        return aValue - bValue
+      }
+    })
+
+    return sortedByUser
+  }
+
   return sorted
+})
+
+// Top 10 players for table display
+const top10Leaderboard = computed(() => {
+  return sortedLeaderboard.value.slice(0, 10)
 })
 
 const highestScore = computed(() => {
@@ -175,12 +212,134 @@ const averageScore = computed(() => {
 
 onMounted(async () => {
   await adminStore.fetchLeaderboard()
+  // Initialize bins to optimal value
+  histogramBins.value = optimalBins.value
   startAutoRefresh()
+  await createScoreHistogram()
 })
 
 onUnmounted(() => {
   stopAutoRefresh()
 })
+
+// Watch for leaderboard changes to update the histogram
+watch(leaderboard, async () => {
+  await createScoreHistogram()
+}, { deep: true })
+
+const createScoreHistogram = async () => {
+  await nextTick()
+
+  if (leaderboard.value.length === 0) return
+
+  const scores = leaderboard.value.map(player => player.total_score)
+
+  // Calculate statistics for the distribution curve
+  const mean = scores.reduce((sum, score) => sum + score, 0) / scores.length
+  const variance = scores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / scores.length
+  const stdDev = Math.sqrt(variance)
+
+  // Generate normal distribution curve points
+  const minScore = Math.min(...scores)
+  const maxScore = Math.max(...scores)
+  const range = maxScore - minScore
+  const curvePoints = 100
+  const xCurve = []
+  const yCurve = []
+
+  for (let i = 0; i <= curvePoints; i++) {
+    const x = minScore + (range * i / curvePoints)
+    const y = (1 / (stdDev * Math.sqrt(2 * Math.PI))) *
+              Math.exp(-0.5 * Math.pow((x - mean) / stdDev, 2))
+    xCurve.push(x)
+    yCurve.push(y)
+  }
+
+  // Scale the curve to match histogram frequency
+  const maxCurveY = Math.max(...yCurve)
+  const scaleFactor = (scores.length / histogramBins.value) / maxCurveY
+  const scaledYCurve = yCurve.map(y => y * scaleFactor)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const histogramTrace: any = {
+    x: scores,
+    type: 'histogram',
+    nbinsx: histogramBins.value,
+    name: 'Score Distribution',
+    marker: {
+      color: 'rgba(0, 123, 255, 0.6)',
+      line: {
+        color: 'rgba(0, 123, 255, 1)',
+        width: 1
+      }
+    },
+    opacity: 0.7
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const curveTrace: any = {
+    x: xCurve,
+    y: scaledYCurve,
+    type: 'scatter',
+    mode: 'lines',
+    name: 'Normal Distribution',
+    line: {
+      color: 'rgba(255, 99, 132, 1)',
+      width: 3
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const layout: any = {
+    title: {
+      text: 'Player Score Distribution with Normal Curve',
+      font: { size: 16, color: '#333' }
+    },
+    xaxis: {
+      title: { text: 'Score' },
+      gridcolor: 'rgba(0,0,0,0.1)',
+      tickformat: ',d'
+    },
+    yaxis: {
+      title: { text: 'Frequency' },
+      gridcolor: 'rgba(0,0,0,0.1)'
+    },
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    font: {
+      family: 'system-ui, -apple-system, sans-serif',
+      size: 12,
+      color: '#333'
+    },
+    margin: {
+      l: 60,
+      r: 30,
+      t: 60,
+      b: 60
+    },
+    legend: {
+      x: 0.7,
+      y: 0.9,
+      bgcolor: 'rgba(255,255,255,0.8)',
+      bordercolor: 'rgba(0,0,0,0.1)',
+      borderwidth: 1
+    },
+    hovermode: 'closest'
+  }
+
+  const config = {
+    responsive: true,
+    displayModeBar: false
+  }
+
+  const data = [histogramTrace, curveTrace]
+
+  try {
+    await Plotly.newPlot('score-histogram', data, layout, config)
+  } catch (error) {
+    console.error('Error creating histogram:', error)
+  }
+}
 
 const startAutoRefresh = () => {
   if (refreshInterval) return
@@ -231,6 +390,16 @@ const downloadCSV = async () => {
   await adminStore.exportData('sessions')
 }
 
+// Histogram control functions
+const updateHistogram = async () => {
+  await createScoreHistogram()
+}
+
+const resetBinsToOptimal = async () => {
+  histogramBins.value = optimalBins.value
+  await createScoreHistogram()
+}
+
 const toggleSortOrder = () => {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
 }
@@ -254,18 +423,6 @@ const getMedalEmoji = (index: number) => {
   if (index === 1) return '🥈'
   if (index === 2) return '🥉'
   return ''
-}
-
-const getBarWidth = (score: number) => {
-  if (highestScore.value === 0) return 0
-  return (score / highestScore.value) * 100
-}
-
-const getBarClass = (index: number) => {
-  if (index === 0) return 'bar-gold'
-  if (index === 1) return 'bar-silver'
-  if (index === 2) return 'bar-bronze'
-  return 'bar-default'
 }
 </script>
 
@@ -451,6 +608,22 @@ const getBarClass = (index: number) => {
   color: #6c757d;
 }
 
+.table-footer {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.total-players-note {
+  margin: 0;
+  text-align: center;
+  color: #6c757d;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
 .leaderboard-table {
   width: 100%;
   border-collapse: collapse;
@@ -558,62 +731,114 @@ const getBarClass = (index: number) => {
   color: #333;
 }
 
-.score-chart {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.chart-container {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.score-bar {
+.plotly-chart {
+  min-height: 400px;
+  width: 100%;
+}
+
+/* Histogram controls styling */
+.histogram-controls {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
 }
 
-.bar-container {
-  flex: 1;
-  height: 24px;
-  background-color: #e9ecef;
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
-}
-
-.bar {
-  height: 100%;
-  border-radius: 12px;
-  transition: width 0.5s ease;
-}
-
-.bar-gold {
-  background: linear-gradient(90deg, #ffd700, #ffed4a);
-}
-
-.bar-silver {
-  background: linear-gradient(90deg, #c0c0c0, #e5e5e5);
-}
-
-.bar-bronze {
-  background: linear-gradient(90deg, #cd7f32, #daa520);
-}
-
-.bar-default {
-  background: linear-gradient(90deg, #007bff, #0056b3);
-}
-
-.bar-label {
+.bins-control {
   display: flex;
   flex-direction: column;
-  min-width: 120px;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.bins-control label {
+  font-weight: 500;
+  color: #333;
   font-size: 0.9rem;
 }
 
-.bar-label .player-name {
-  font-weight: 500;
+.bins-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #ddd;
+  outline: none;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  cursor: pointer;
 }
 
-.bar-label .score {
-  color: #6c757d;
+.bins-slider:hover {
+  opacity: 1;
+}
+
+.bins-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #007bff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.bins-slider::-webkit-slider-thumb:hover {
+  background: #0056b3;
+}
+
+.bins-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #007bff;
+  cursor: pointer;
+  border: none;
+}
+
+.bins-range {
+  display: flex;
+  justify-content: space-between;
   font-size: 0.8rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+}
+
+.reset-bins-btn {
+  padding: 0.5rem 1rem;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+
+.reset-bins-btn:hover {
+  background-color: #545b62;
+}
+
+@media (max-width: 768px) {
+  .histogram-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bins-control {
+    margin-bottom: 0.5rem;
+  }
 }
 </style>

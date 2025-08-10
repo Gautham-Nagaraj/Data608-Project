@@ -25,6 +25,7 @@ export interface Session {
 
 
 export interface LeaderboardEntry {
+  rank: number
   player_id: number
   nickname: string
   total_score: number
