@@ -244,7 +244,7 @@ export type PriceHistory = Record<string, number[]>;
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/sessionStore'
-import * as api from '@/services/api'
+import api from '@/services/api'
 // @ts-expect-error - Plotly types might not be perfect
 import * as Plotly from 'plotly.js-dist-min'
 
