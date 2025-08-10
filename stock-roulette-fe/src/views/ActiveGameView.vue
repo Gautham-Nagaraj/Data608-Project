@@ -233,7 +233,6 @@ export type Stock = {
   sector?: string;
 };
 export type PriceHistory = Record<string, number[]>;
-</script>
 <script setup lang="ts">
 
 const stockOwned = ref({} as StockOwned); // Track owned quantities
