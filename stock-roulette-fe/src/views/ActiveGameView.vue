@@ -26,6 +26,7 @@
         <button @click="toggleDebugPanel" class="debug-toggle">
           {{ showDebugPanel ? 'Hide Debug' : 'Show Debug' }}
         </button>
+        <button @click="endGame" class="end-game-btn">End Game</button>
       </div>
 
       <div v-if="showDebugPanel" class="debug-panel">
@@ -152,12 +153,6 @@
         </div>
       </div>
 
-      <div class="game-controls">
-        <button @click="endGame" class="end-game-btn">End Game</button>
-      </div>
-    </div>
-
-    <div class="advice-section-fixed">
       <div class="advice-section">
         <div class="advice-header">
           <h3>🤖 AI Trading Advisor</h3>
@@ -1269,38 +1264,29 @@ async function endGame() {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  height: 100vh;
   width: 100vw;
   box-sizing: border-box;
   background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
   color: #ffffff;
   font-family: 'Orbitron', 'Courier New', 'Monaco', monospace;
-  overflow: hidden;
 }
 
 .main-content {
   flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 2vw 2vw 0 2vw;
+  padding: 0.5vw 2vw 0.5vw 2vw;
   min-height: 0;
-}
-
-.advice-section-fixed {
-  flex-shrink: 0;
-  width: 100vw;
-  background: rgba(0,0,0,0.85);
-  box-shadow: 0 -2px 16px rgba(0,0,0,0.12);
-  border-top: 1px solid #222;
-  z-index: 10;
+  padding-bottom: 0;
 }
 
 .advice-section {
-  margin: 0 auto;
-  max-width: 1800px;
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 15px;
-  padding: 1.5rem 2vw 1rem 2vw;
+  padding: 0.75rem 2vw 0.75rem 2vw;
+  margin: 0.5rem 0 0 0;
   border: 2px solid rgba(0, 245, 255, 0.3);
-  background: rgba(255,255,255,0.05);
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 @media (max-width: 900px) {
@@ -1328,8 +1314,8 @@ async function endGame() {
 .game-info {
   display: flex;
   justify-content: center;
-  gap: 2rem;
-  margin-bottom: 2rem;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 }
 
@@ -1431,6 +1417,10 @@ async function endGame() {
 .debug-toggle-container {
   text-align: center;
   margin: 1rem 0;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .debug-toggle {
@@ -1457,8 +1447,8 @@ async function endGame() {
 .charts-container {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 2vw;
-  margin-bottom: 2vw;
+  gap: 1vw;
+  margin-bottom: 0.5vw;
   width: 100%;
   max-width: 1800px;
   box-sizing: border-box;
@@ -1481,10 +1471,10 @@ async function endGame() {
 .chart-card {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 15px;
-  padding: 2vw 1.5vw;
+  padding: 1vw 1.5vw;
   border: 2px solid;
   transition: all 0.3s ease;
-  min-height: 40vh;
+  min-height: 24vh;
   min-width: 280px;
   max-width: 98vw;
   width: 100%;
@@ -1771,9 +1761,9 @@ async function endGame() {
 
 
 .chart-wrapper {
-  height: 28vh;
-  min-height: 180px;
-  max-height: 350px;
+  height: 14vh;
+  min-height: 100px;
+  max-height: 180px;
   position: relative;
 }
 
@@ -1786,19 +1776,19 @@ async function endGame() {
 
 .game-controls {
   text-align: center;
-  margin-top: 2rem;
+  margin-top: 0.5rem;
 }
 
 .end-game-btn {
   background: linear-gradient(135deg, #ff6b6b 0%, #ff4757 100%);
-  border: none;
+  border: 1px solid rgba(255, 107, 107, 0.5);
   color: white;
-  padding: 1rem 2rem;
-  font-size: 1.1rem;
-  font-weight: 700;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
   font-family: 'Orbitron', 'Courier New', monospace;
@@ -1807,8 +1797,8 @@ async function endGame() {
 }
 
 .end-game-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(255, 107, 107, 0.4);
+  background: rgba(255, 107, 107, 0.3);
+  transform: translateY(-1px);
 }
 
 .end-game-btn::before {
@@ -1839,7 +1829,7 @@ async function endGame() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
   gap: 1rem;
 }
@@ -1995,17 +1985,17 @@ async function endGame() {
 
 .advice-results h4 {
   color: #00f5ff;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 700;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
 .advice-cards {
   display: grid;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 @media (min-width: 768px) {
@@ -2017,7 +2007,7 @@ async function endGame() {
 .advice-card {
   background: rgba(0, 0, 0, 0.3);
   border-radius: 10px;
-  padding: 1rem;
+  padding: 0.75rem;
   border: 2px solid;
   transition: all 0.3s ease;
 }
@@ -2145,7 +2135,7 @@ async function endGame() {
   }
 
   .chart-wrapper {
-    height: 18vh;
+    height: 16vh;
     min-height: 120px;
   }
 
