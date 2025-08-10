@@ -1,217 +1,252 @@
 <template>
-              <div v-if="playerName" class="player-info">
-                <span>👤 {{ playerName }}</span>
-              </div>
-              <div class="session-info">
-                <span>Session: {{ sessionId }}</span>
-              </div>
-              <div class="date-info">
-                <span>{{ currentDate || selectedDate }}</span>
-              </div>
-              <div class="cash-info">
-                <span>💰 Cash: ${{ playerCash.toFixed(2) }}</span>
-              </div>
-              <div class="portfolio-info">
-                <span>📊 Portfolio: ${{ getPortfolioValue().toFixed(2) }}</span>
-              </div>
-              <div class="connection-info">
-                <span :class="connectionStatus.class">{{ connectionStatus.text }}</span>
-              </div>
+  <div class="active-game-root">
+    <div class="main-content">
+      <div class="game-info">
+        <div v-if="playerName" class="player-info">
+          <span>👤 {{ playerName }}</span>
+        </div>
+        <div class="session-info">
+          <span>Session: {{ sessionId }}</span>
+        </div>
+        <div class="date-info">
+          <span>{{ currentDate || selectedDate }}</span>
+        </div>
+        <div class="cash-info">
+          <span>💰 Cash: ${{ playerCash.toFixed(2) }}</span>
+        </div>
+        <div class="portfolio-info">
+          <span>📊 Portfolio: ${{ getPortfolioValue().toFixed(2) }}</span>
+        </div>
+        <div class="connection-info">
+          <span :class="connectionStatus.class">{{ connectionStatus.text }}</span>
+        </div>
+      </div>
+
+      <div class="debug-toggle-container">
+        <button @click="toggleDebugPanel" class="debug-toggle">
+          {{ showDebugPanel ? 'Hide Debug' : 'Show Debug' }}
+        </button>
+      </div>
+
+      <div v-if="showDebugPanel" class="debug-panel">
+        <h4>🔧 Debug Info</h4>
+        <div class="debug-item"><strong>WebSocket State:</strong> {{ getWebSocketState() }}</div>
+        <div class="debug-item">
+          <strong>Price Data Points:</strong>
+          <ul>
+            <li v-for="stock in stocks" :key="stock.ticker">
+              {{ stock.ticker }}: {{ priceHistory[stock.ticker]?.length || 0 }} points (Latest: ${{
+                getCurrentPrice(stock.ticker)
+              }}) {{ getPriceChangeText(stock.ticker) }}
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div v-if="tradingError" class="trading-error-banner">
+        <div class="error-content">
+          <span class="error-icon">💸</span>
+          <span class="error-message">{{ tradingError }}</span>
+          <button @click="clearTradingError" class="close-error-btn">×</button>
+        </div>
+      </div>
+
+      <div class="charts-container">
+        <div
+          v-for="(stock, index) in stocks"
+          :key="stock.ticker"
+          class="chart-card"
+          :class="{
+            'popular-card': stock.type === 'Popular',
+            'volatile-card': stock.type === 'Volatile',
+            'sector-card': stock.type === 'Sector'
+          }"
+        >
+          <div class="chart-header">
+            <h3>{{ stock.type.toUpperCase() }} - {{ stock.ticker }}</h3>
+            <div class="company-name">{{ stock.companyName || stock.ticker }}</div>
+            <div class="current-price">${{ getCurrentPrice(stock.ticker) }}</div>
+            <div class="price-change" :class="getPriceChangeClass(stock.ticker)">
+              {{ getPriceChangeText(stock.ticker) }}
             </div>
-            <div v-if="showDebugPanel" class="debug-panel">
-              <h4>🔧 Debug Info</h4>
-              <div class="debug-item"><strong>WebSocket State:</strong> {{ getWebSocketState() }}</div>
-              <div class="debug-item">
-                <strong>Price Data Points:</strong>
-                <ul>
-                  <li v-for="stock in stocks" :key="stock.ticker">
-                    {{ stock.ticker }}: {{ priceHistory[stock.ticker]?.length || 0 }} points (Latest: ${{
-                      getCurrentPrice(stock.ticker)
-                    }}) {{ getPriceChangeText(stock.ticker) }}
-                  </li>
-                </ul>
-              </div>
-              <div class="debug-item"><strong>Chart Update Key:</strong> {{ chartDataKey }}</div>
-              <button @click="toggleDebugPanel" class="debug-toggle">Hide Debug</button>
-            </div>
-            <div v-else class="debug-toggle-container">
-              <button @click="toggleDebugPanel" class="debug-toggle">Show Debug</button>
-            </div>
-            <div v-if="tradingError" class="trading-error-banner">
-              <div class="error-content">
-                <span class="error-icon">💸</span>
-                <span class="error-message">{{ tradingError }}</span>
-                <button @click="clearTradingError" class="close-error-btn">×</button>
-              </div>
-            </div>
-            <div class="charts-container">
-              <div
-                v-for="(stock, index) in stocks"
-                :key="stock.ticker"
-                class="chart-card"
-                :class="stock.type.toLowerCase() + '-card'"
-              >
-                <div class="chart-header">
-                  <h3>{{ stock.type.toUpperCase() }} - {{ stock.ticker }}</h3>
-                  <div class="company-name">{{ stock.companyName || stock.ticker }}</div>
-                  <div class="current-price">${{ getCurrentPrice(stock.ticker) }}</div>
-                  <div class="price-change" :class="getPriceChangeClass(stock.ticker)">
-                    {{ getPriceChangeText(stock.ticker) }}
-                  </div>
-                  <div class="stock-owned">Owned: {{ stockOwned[stock.ticker] || 0 }} shares</div>
-                </div>
-                <div class="chart-wrapper">
-                  <div :id="`chart-${index}`" class="plotly-chart" :key="chartDataKey"></div>
-                </div>
-                <div class="trading-controls">
-                  <div class="trade-input-section">
-                    <div class="trade-input-group">
-                      <label for="`quantity-${stock.ticker}`">Quantity:</label>
-                      <div class="input-with-buttons">
-                        <input
-                          v-model.number="tradeQuantities[stock.ticker]"
-                          :id="`quantity-${stock.ticker}`"
-                          type="number"
-                          min="1"
-                          :max="getMaxBuyQuantity(stock.ticker)"
-                          class="quantity-input"
-                          :disabled="!canBuyStock(stock.ticker) && !canSellStock(stock.ticker)"
-                        />
-                        <div class="max-buttons">
-                          <button
-                            class="max-btn buy-max"
-                            @click="setMaxBuy(stock.ticker)"
-                            :disabled="!canBuyStock(stock.ticker)"
-                          >
-                            Max Buy
-                          </button>
-                          <button
-                            class="max-btn sell-max"
-                            @click="setMaxSell(stock.ticker)"
-                            :disabled="!canSellStock(stock.ticker)"
-                          >
-                            Max Sell
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="trade-hints">
-                      <div class="buy-hint" v-if="canBuyStock(stock.ticker)">
-                        <span class="hint-text">You can buy up to {{ getMaxBuyQuantity(stock.ticker) }} shares</span>
-                      </div>
-                      <div class="sell-hint" v-if="canSellStock(stock.ticker)">
-                        <span class="hint-text">You can sell up to {{ getMaxSellQuantity(stock.ticker) }} shares</span>
-                      </div>
-                      <div class="no-trade-hint" v-if="!canBuyStock(stock.ticker) && !canSellStock(stock.ticker)">
-                        <span class="hint-text">Insufficient funds & no shares owned</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="trade-buttons">
-                    <button
-                      @click="buyStock(stock.ticker)"
-                      :disabled="!canBuyStock(stock.ticker)"
-                      class="buy-btn"
-                      :title="
-                        canBuyStock(stock.ticker)
-                          ? `Buy up to ${getMaxBuyQuantity(stock.ticker)} shares`
-                          : 'Insufficient funds'
-                      "
-                    >
-                      💰 Buy
-                    </button>
-                    <button
-                      @click="sellStock(stock.ticker)"
-                      :disabled="!canSellStock(stock.ticker)"
-                      class="sell-btn"
-                      :title="
-                        canSellStock(stock.ticker)
-                          ? `Sell up to ${getMaxSellQuantity(stock.ticker)} shares`
-                          : 'No shares owned'
-                      "
-                    >
-                      💸 Sell
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="game-controls">
-              <button @click="endGame" class="end-game-btn">End Game</button>
-            </div>
+            <div class="stock-owned">Owned: {{ stockOwned[stock.ticker] || 0 }} shares</div>
           </div>
-          <div class="advice-section-fixed">
-            <div class="advice-section">
-              <div class="advice-header">
-                <h3>🤖 AI Trading Advisor</h3>
-                <div class="advice-controls">
-                  <button
-                    @click="getAIAdvice"
-                    :disabled="isLoadingAdvice || stocks.length === 0"
-                    class="advice-btn"
-                  >
-                    {{ isLoadingAdvice ? '🔄 AI Analyzing...' : '🎯 Get AI Advice' }}
-                  </button>
-                </div>
-              </div>
-              <div v-if="showDebugPanel" class="advice-debug">
-                <h5>🔧 AI Advice Debug Info</h5>
-                <div class="debug-item"><strong>Session ID:</strong> {{ sessionId || 'None' }}</div>
-                <div class="debug-item">
-                  <strong>Available Stocks:</strong> {{ stocks.map((s) => s.ticker).join(', ') || 'None' }}
-                </div>
-                <div class="debug-item">
-                  <strong>API Endpoint:</strong> POST /sessions/{{ sessionId }}/advise
-                </div>
-                <div class="debug-item">
-                  <strong>Last Response:</strong>
-                  <pre v-if="lastAdviceResponse">{{ JSON.stringify(getOrderedAdviceResponse(), null, 2) }}</pre>
-                  <span v-else>No response yet</span>
-                </div>
-              </div>
-              <div v-if="isLoadingAdvice" class="advice-loading">
-                <div class="loading-spinner"></div>
-                <p>AI is analyzing market trends and your portfolio...</p>
-              </div>
-              <div v-if="adviceError" class="advice-error">
-                <p>❌ {{ adviceError }}</p>
-                <button @click="clearAdviceError" class="clear-error-btn">Clear</button>
-              </div>
-              <div v-if="tradingAdvice.length > 0 && !isLoadingAdvice" class="advice-results">
-                <h4>💡 Trading Recommendations</h4>
-                <div class="advice-cards">
-                  <div
-                    v-for="advice in tradingAdvice"
-                    :key="advice.symbol"
-                    class="advice-card"
-                    :class="getAdviceActionClass(advice.action)"
-                  >
-                    <div class="advice-card-header">
-                      <span class="stock-symbol">{{ advice.symbol }}</span>
-                      <span class="advice-action" :class="getAdviceActionClass(advice.action)">
-                        {{ advice.action }}
-                      </span>
-                    </div>
-                    <div class="advice-reason">
-                      {{ advice.reason }}
-                    </div>
-                    <div class="current-position">
-                      Currently own: {{ stockOwned[advice.symbol] || 0 }} shares
-                    </div>
+
+          <div class="chart-wrapper">
+            <div :id="`chart-${index}`" class="plotly-chart" :key="chartDataKey"></div>
+          </div>
+
+          <div class="trading-controls">
+            <div class="trade-input-section">
+              <div class="trade-input-group">
+                <label :for="`quantity-${stock.ticker}`">Quantity:</label>
+                <div class="input-with-buttons">
+                  <input
+                    v-model.number="tradeQuantities[stock.ticker]"
+                    :id="`quantity-${stock.ticker}`"
+                    type="number"
+                    min="1"
+                    :max="getMaxBuyQuantity(stock.ticker)"
+                    class="quantity-input"
+                    :disabled="!canBuyStock(stock.ticker) && !canSellStock(stock.ticker)"
+                  />
+                  <div class="max-buttons">
+                    <button
+                      class="max-btn buy-max"
+                      @click="setMaxBuy(stock.ticker)"
+                      :disabled="!canBuyStock(stock.ticker)"
+                    >
+                      Max Buy
+                    </button>
+                    <button
+                      class="max-btn sell-max"
+                      @click="setMaxSell(stock.ticker)"
+                      :disabled="!canSellStock(stock.ticker)"
+                    >
+                      Max Sell
+                    </button>
                   </div>
                 </div>
-                <div class="advice-disclaimer">
-                  <small
-                    >⚠️ This is AI-generated advice for educational purposes. Always do your own
-                    research.</small
-                  >
+              </div>
+
+              <div class="trade-hints">
+                <div class="buy-hint" v-if="canBuyStock(stock.ticker)">
+                  <span class="hint-text">You can buy up to {{ getMaxBuyQuantity(stock.ticker) }} shares</span>
+                </div>
+                <div class="sell-hint" v-if="canSellStock(stock.ticker)">
+                  <span class="hint-text">You can sell up to {{ getMaxSellQuantity(stock.ticker) }} shares</span>
+                </div>
+                <div class="no-trade-hint" v-if="!canBuyStock(stock.ticker) && !canSellStock(stock.ticker)">
+                  <span class="hint-text">Insufficient funds & no shares owned</span>
                 </div>
               </div>
+            </div>
+
+            <div class="trade-buttons">
+              <button
+                @click="buyStock(stock.ticker)"
+                :disabled="!canBuyStock(stock.ticker)"
+                class="buy-btn"
+                :title="
+                  canBuyStock(stock.ticker)
+                    ? `Buy up to ${getMaxBuyQuantity(stock.ticker)} shares`
+                    : 'Insufficient funds'
+                "
+              >
+                💰 Buy
+              </button>
+              <button
+                @click="sellStock(stock.ticker)"
+                :disabled="!canSellStock(stock.ticker)"
+                class="sell-btn"
+                :title="
+                  canSellStock(stock.ticker)
+                    ? `Sell up to ${getMaxSellQuantity(stock.ticker)} shares`
+                    : 'No shares owned'
+                "
+              >
+                💸 Sell
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
+      <div class="game-controls">
+        <button @click="endGame" class="end-game-btn">End Game</button>
+      </div>
+    </div>
 
+    <div class="advice-section-fixed">
+      <div class="advice-section">
+        <div class="advice-header">
+          <h3>🤖 AI Trading Advisor</h3>
+          <div class="advice-controls">
+            <button
+              @click="getAIAdvice"
+              :disabled="isLoadingAdvice || stocks.length === 0"
+              class="advice-btn"
+            >
+              {{ isLoadingAdvice ? '🔄 AI Analyzing...' : '🎯 Get AI Advice' }}
+            </button>
+          </div>
+        </div>
+        <div v-if="showDebugPanel" class="advice-debug">
+          <h5>🔧 AI Advice Debug Info</h5>
+          <div class="debug-item"><strong>Session ID:</strong> {{ sessionId || 'None' }}</div>
+          <div class="debug-item">
+            <strong>Available Stocks:</strong> {{ stocks.map((s) => s.ticker).join(', ') || 'None' }}
+          </div>
+          <div class="debug-item">
+            <strong>API Endpoint:</strong> POST /sessions/{{ sessionId }}/advise
+          </div>
+          <div class="debug-item">
+            <strong>Last Response:</strong>
+            <pre v-if="lastAdviceResponse">{{ JSON.stringify(getOrderedAdviceResponse(), null, 2) }}</pre>
+            <span v-else>No response yet</span>
+          </div>
+        </div>
+        <div v-if="isLoadingAdvice" class="advice-loading">
+          <div class="loading-spinner"></div>
+          <p>AI is analyzing market trends and your portfolio...</p>
+        </div>
+        <div v-if="adviceError" class="advice-error">
+          <p>❌ {{ adviceError }}</p>
+          <button @click="clearAdviceError" class="clear-error-btn">Clear</button>
+        </div>
+        <div v-if="tradingAdvice.length > 0 && !isLoadingAdvice" class="advice-results">
+          <h4>💡 Trading Recommendations</h4>
+          <div class="advice-cards">
+            <div
+              v-for="advice in tradingAdvice"
+              :key="advice.symbol"
+              class="advice-card"
+              :class="getAdviceActionClass(advice.action)"
+            >
+              <div class="advice-card-header">
+                <span class="stock-symbol">{{ advice.symbol }}</span>
+                <span class="advice-action" :class="getAdviceActionClass(advice.action)">
+                  {{ advice.action }}
+                </span>
+              </div>
+              <div class="advice-reason">
+                {{ advice.reason }}
+              </div>
+              <div class="current-position">
+                Currently own: {{ stockOwned[advice.symbol] || 0 }} shares
+              </div>
+            </div>
+          </div>
+          <div class="advice-disclaimer">
+            <small
+              >⚠️ This is AI-generated advice for educational purposes. Always do your own
+              research.</small
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script lang="ts">
+export type StockOwned = Record<string, number>;
+export type Stock = {
+  ticker: string;
+  type: string;
+  companyName?: string;
+  sector?: string;
+};
+export type PriceHistory = Record<string, number[]>;
+</script>
+
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { useSessionStore } from '@/stores/sessionStore'
+import * as api from '@/services/api'
+// @ts-expect-error - Plotly types might not be perfect
+import * as Plotly from 'plotly.js-dist-min'
 
 const router = useRouter()
 const store = useSessionStore()
@@ -223,20 +258,8 @@ const currentDate = ref('')
 const playerName = ref('')
 const playerCash = ref(500) // Starting cash
 
-// --- TypeScript types moved to separate block to avoid Vue parser errors ---
-<script lang="ts">
-export type StockOwned = Record<string, number>;
-export type Stock = {
-  ticker: string;
-  type: string;
-  companyName?: string;
-  sector?: string;
-};
-export type PriceHistory = Record<string, number[]>;
-</script>
-<script setup lang="ts">
-
 const stockOwned = ref({} as StockOwned); // Track owned quantities
+const tradeQuantities = ref({} as Record<string, number>); // Track quantities for trading inputs
 const stocks = ref([] as Stock[]);
 const priceHistory = ref({} as PriceHistory);
 const dateLabels = ref([] as string[]);
@@ -817,17 +840,20 @@ function getMaxSellQuantity(ticker: string): number {
 }
 
 function setMaxBuyQuantity(ticker: string): void {
-  const quantityInput = document.getElementById(`quantity-${ticker}`) as HTMLInputElement
-  if (quantityInput) {
-    quantityInput.value = getMaxBuyQuantity(ticker).toString()
-  }
+  tradeQuantities.value[ticker] = getMaxBuyQuantity(ticker)
 }
 
 function setMaxSellQuantity(ticker: string): void {
-  const quantityInput = document.getElementById(`quantity-${ticker}`) as HTMLInputElement
-  if (quantityInput) {
-    quantityInput.value = getMaxSellQuantity(ticker).toString()
-  }
+  tradeQuantities.value[ticker] = getMaxSellQuantity(ticker)
+}
+
+// Shorter function names for template
+function setMaxBuy(ticker: string): void {
+  setMaxBuyQuantity(ticker)
+}
+
+function setMaxSell(ticker: string): void {
+  setMaxSellQuantity(ticker)
 }
 
 function canBuyStock(ticker: string): boolean {
@@ -840,8 +866,7 @@ function canSellStock(ticker: string): boolean {
 }
 
 function buyStock(ticker: string): void {
-  const quantityInput = document.getElementById(`quantity-${ticker}`) as HTMLInputElement
-  const quantity = parseInt(quantityInput?.value || '1')
+  const quantity = tradeQuantities.value[ticker] || 1
   const currentPrice = parseFloat(getCurrentPrice(ticker))
   const totalCost = quantity * currentPrice
 
@@ -876,12 +901,11 @@ function buyStock(ticker: string): void {
   recordTrade(ticker, 'buy', quantity, currentPrice)
 
   // Clear the input
-  if (quantityInput) quantityInput.value = ''
+  tradeQuantities.value[ticker] = 1
 }
 
 function sellStock(ticker: string): void {
-  const quantityInput = document.getElementById(`quantity-${ticker}`) as HTMLInputElement
-  const quantity = parseInt(quantityInput?.value || '1')
+  const quantity = tradeQuantities.value[ticker] || 1
   const currentPrice = parseFloat(getCurrentPrice(ticker))
   const totalValue = quantity * currentPrice
 
@@ -916,7 +940,7 @@ function sellStock(ticker: string): void {
   recordTrade(ticker, 'sell', quantity, currentPrice)
 
   // Clear the input
-  if (quantityInput) quantityInput.value = ''
+  tradeQuantities.value[ticker] = 1
 }
 function getWebSocketState(): string {
   if (!socket) return 'Not Connected'
