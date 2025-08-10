@@ -135,7 +135,7 @@ async def get_sessions_with_filters(
 async def get_leaderboard(
     db: AsyncSession = Depends(get_db),
     admin_auth = Depends(require_admin_auth),
-    top_n: int = Query(10, description="Number of top players to return"),
+    top_n: int = Query(500, description="Number of top players to return"),
     sort_by: str = Query("total_score", description="Sort by: total_score, total_profit"),
 ):
     """Get top N players sorted by specified metric"""

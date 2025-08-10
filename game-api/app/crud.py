@@ -224,17 +224,17 @@ async def get_leaderboard(db: AsyncSession, top_n: int = 10, sort_by: str = "tot
     result = await db.execute(query.limit(top_n))
     players = result.fetchall()
     
-    # Format results
+    # Format results with rank
     formatted_result = []
-    for player in players:
+    for idx, player in enumerate(players, 1):
         formatted_result.append({
+            "rank": idx,
             "player_id": player.player_id,
             "nickname": player.nickname,
             "total_score": float(player.total_score or 0),
             "total_profit": float(player.total_profit or 0),
             "total_trades": int(player.total_trades or 0)
         })
-    
     return formatted_result
 
 
