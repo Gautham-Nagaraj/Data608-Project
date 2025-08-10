@@ -1112,13 +1112,13 @@ async function getAIAdvice() {
           const sortedRecommendations = validRecommendations.sort((a, b) => {
             const stockA = stocks.value.find(s => s.ticker === a.symbol)
             const stockB = stocks.value.find(s => s.ticker === b.symbol)
-            
+
             const typeOrderA = getStockTypeOrder(stockA?.type || '')
             const typeOrderB = getStockTypeOrder(stockB?.type || '')
-            
+
             return typeOrderA - typeOrderB
           })
-          
+
           tradingAdvice.value = sortedRecommendations
           console.log('✅ Successfully set trading advice (sorted by UI order):', sortedRecommendations)
         } else {
@@ -1214,23 +1214,23 @@ function getStockTypeOrder(type: string): number {
 
 function getOrderedAdviceResponse(): object | null {
   if (!lastAdviceResponse.value) return null
-  
+
   // Create a copy of the response to avoid mutating the original
   const orderedResponse = { ...lastAdviceResponse.value } as any
-  
+
   // If the response has an advice field that's an array, sort it
   if (orderedResponse.advice && Array.isArray(orderedResponse.advice)) {
     orderedResponse.advice = [...orderedResponse.advice].sort((a: any, b: any) => {
       const stockA = stocks.value.find(s => s.ticker === a.symbol)
       const stockB = stocks.value.find(s => s.ticker === b.symbol)
-      
+
       const typeOrderA = getStockTypeOrder(stockA?.type || '')
       const typeOrderB = getStockTypeOrder(stockB?.type || '')
-      
+
       return typeOrderA - typeOrderB
     })
   }
-  
+
   return orderedResponse
 }
 
@@ -1264,12 +1264,21 @@ async function endGame() {
 </script>
 
 <style scoped>
+
 .active-game-container {
   min-height: 100vh;
+  min-width: 100vw;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
   background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
   color: #ffffff;
-  padding: 2rem;
+  padding: 2vw 2vw 2vw 2vw;
   font-family: 'Orbitron', 'Courier New', 'Monaco', monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .active-game-container h2 {
@@ -1414,32 +1423,42 @@ async function endGame() {
   transform: translateY(-1px);
 }
 
+
 .charts-container {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 2rem;
-  margin-bottom: 2rem;
+  gap: 2vw;
+  margin-bottom: 2vw;
+  width: 100%;
+  max-width: 1800px;
+  box-sizing: border-box;
+  justify-items: center;
 }
 
 @media (min-width: 1200px) {
   .charts-container {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 768px) and (max-width: 1199px) {
   .charts-container {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
 
 .chart-card {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 15px;
-  padding: 1.5rem;
+  padding: 2vw 1.5vw;
   border: 2px solid;
   transition: all 0.3s ease;
-  min-height: 550px;
+  min-height: 40vh;
+  min-width: 280px;
+  max-width: 98vw;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .popular-card {
@@ -1720,14 +1739,19 @@ async function endGame() {
   cursor: not-allowed;
 }
 
+
 .chart-wrapper {
-  height: 250px;
+  height: 28vh;
+  min-height: 180px;
+  max-height: 350px;
   position: relative;
 }
 
 .plotly-chart {
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .game-controls {
@@ -2065,15 +2089,15 @@ async function endGame() {
 /* Responsive design */
 @media (max-width: 768px) {
   .active-game-container {
-    padding: 1rem;
+    padding: 2vw 1vw;
   }
 
   .active-game-container h2 {
-    font-size: 1.8rem;
+    font-size: 1.5rem;
   }
 
   .game-info {
-    gap: 1rem;
+    gap: 1vw;
   }
 
   .session-info,
@@ -2081,17 +2105,18 @@ async function endGame() {
   .player-info,
   .cash-info,
   .portfolio-info {
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.5rem;
     font-size: 0.9rem;
   }
 
   .chart-card {
-    padding: 1rem;
-    min-height: 450px;
+    padding: 1vw;
+    min-height: 30vh;
   }
 
   .chart-wrapper {
-    height: 200px;
+    height: 18vh;
+    min-height: 120px;
   }
 
   .advice-header {
