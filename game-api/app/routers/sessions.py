@@ -144,6 +144,7 @@ Player's trade history:
     # Create the chain
     chain = prompt_template | structured_llm 
 
+    import asyncio
     try:
         # Prepare prompt input
         prompt_input = {
@@ -155,8 +156,12 @@ Player's trade history:
 
         logger.info("Generated prompt input for LLM:\n%s", prompt_input)
 
-        # Execute the chain
-        result = await chain.ainvoke(prompt_input, timeout=10)
+        # Execute the chain with a short timeout (3 seconds)
+        try:
+            result = await asyncio.wait_for(chain.ainvoke(prompt_input, timeout=10), timeout=13)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            logger.error("LLM call timed out after 3 seconds.")
+            raise
 
         # Filter advice to only include selected symbols and ensure all are present
         selected_set = set(symbols)
@@ -183,7 +188,18 @@ Player's trade history:
 
         # Return the Pydantic model directly (FastAPI will handle serialization)
         return result
-    
+
+    except (asyncio.TimeoutError, asyncio.CancelledError):
+        logger.error("LLM call timed out or was cancelled. Returning fallback advice immediately.")
+        fallback_advice = [
+            schemas.TradingAdviceItem(
+                symbol=symbol,
+                action="HOLD",
+                reason="Unable to generate AI advice at this time (timeout). Consider holding your position."
+            )
+            for symbol in symbols
+        ]
+        return schemas.TradingAdviceResponse(advice=fallback_advice)
     except Exception as e:
         logger.error("LLM generation or parsing failed: %s", str(e))
         logger.debug("Traceback:\n%s", traceback.format_exc())
@@ -205,5 +221,4 @@ Player's trade history:
             )
             for symbol in symbols
         ]
-
         return schemas.TradingAdviceResponse(advice=fallback_advice)

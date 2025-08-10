@@ -9,11 +9,14 @@ from app.core.config import settings
 """
 Database engine and session management.
 """
-# Create async SQLAlchemy engine
+# Create async SQLAlchemy engine with increased pool size and overflow
 async_engine = create_async_engine(
     str(settings.DATABASE_URL),
     pool_pre_ping=True,
-    echo=False
+    echo=False,
+    pool_size=40,         # default is 5, increase as needed
+    max_overflow=80,      # default is 10, increase as needed
+    pool_timeout=15       # optional: fail faster if pool is exhausted
 )
 
 # Async session factory
